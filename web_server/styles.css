@@ -1,0 +1,65 @@
+.app > div {
+    margin-bottom: 10px;
+}
+
+.progress-board {
+    background-color: blue;
+    height: 200px;
+    width: min-content;
+    padding: 10px 5px;
+    display: flex;
+    flex-direction: column;
+}
+
+.progress-board.Fascist {
+    background-color: orange;
+}
+
+.progress-board .board-title {
+    margin: 0;
+    text-align: center;
+    color: white;
+}
+
+.slots-container {
+    display: flex;
+    margin-top: 10px;
+    flex-grow: 1;
+}
+
+.progress-slot {
+    width: 120px;
+    margin: 0 5px;
+    background-color: lightblue;
+    padding: 10px;
+}
+
+.Fascist .progress-slot {
+    background-color: #e47d1a;
+}
+
+.progress-slot.filled {
+    background-color: #31b9bb;
+}
+
+.Fascist .progress-slot.filled {
+    background-color: #af6107;
+}
+
+.player-container {
+    display: flex;
+    flex-direction: row;
+}
+
+.player-info {
+    padding: 10px;
+    width: 60px;
+}
+
+.player-info.position-president {
+    background-color: burlywood;
+}
+
+.player-info.position-chancellor {
+    background-color: brown;
+}
