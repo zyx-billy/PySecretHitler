@@ -63,3 +63,41 @@
 .player-info.position-chancellor {
     background-color: brown;
 }
+
+.user-choice-selector {
+    width: min-content;
+    border: 2px solid green;
+    padding: 10px;
+}
+
+.user-choice-selector > div {
+    white-space: nowrap;
+}
+
+.user-choice-selector .item-container {
+    display: flex;
+    flex-direction: row;
+    margin: 10px 0;
+}
+
+.user-choice-item {
+    height: 20px;
+    min-width: 20px;
+    text-align: center;
+    margin: 0 5px;
+    padding: 0 10px;
+    border: 2px;
+    cursor: pointer;
+    color: black;
+    background-color: white;
+    border: 2px solid black;
+}
+
+.user-choice-item:hover {
+    background-color: lightslategray;
+}
+
+.user-choice-item.selected {
+    background-color: black;
+    color: white;
+}

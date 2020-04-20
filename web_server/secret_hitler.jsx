@@ -1,6 +1,11 @@
 class App extends React.Component {
     constructor(props) {
         super(props);
+        this.on_user_choice = this.on_user_choice.bind(this);
+    }
+
+    async on_user_choice(choice) {
+        console.log("received user choice: " + choice);
     }
 
     render() {
@@ -11,6 +16,10 @@ class App extends React.Component {
                 <TileDeck name="Unused Tiles" size={0} />
                 <TileDeck name="Discarded Tiles" size={0} />
                 <PlayerContainer names={["alice", "bob", "charlie", "david"]} />
+                <UserChoiceSelector
+                    on_user_choice={this.on_user_choice}
+                    prompt="vote for chancellor"
+                    choices={["ja","nein","what?"]} />
             </div>
         );
     }
@@ -107,6 +116,80 @@ class PlayerContainer extends React.Component {
                     {players}
                 </div>
             </div>
+        );
+    }
+}
+
+class UserChoiceItem extends React.Component {
+    constructor(props) { // choice, is_selected, on_select
+        super(props);
+        this.on_self_selected = this.on_self_selected.bind(this);
+    }
+
+    on_self_selected() {
+        this.props.on_select(this.props.choice)
+    }
+
+    render() {
+        var classes = "user-choice-item";
+        if (this.props.is_selected)
+            classes += " selected"
+        return (
+            <div className={classes} onClick={this.on_self_selected}>
+                {this.props.choice}
+            </div>
+        );
+    }
+}
+
+class UserChoiceSelector extends React.Component {
+    constructor(props) { // on_user_choice, prompt, choices
+        super(props);
+        this.on_child_selected = this.on_child_selected.bind(this);
+        this.on_submit = this.on_submit.bind(this);
+        this.state = {
+            selected: undefined,
+            submission: undefined
+        };
+    }
+
+    on_child_selected(key) {
+        this.setState({
+            selected: key
+        });
+    }
+
+    on_submit() {
+        this.setState((state, props) => {
+            this.props.on_user_choice(state.selected);
+            return {submission: state.selected};
+        });
+        
+    }
+
+    render() {
+        const selections = this.props.choices.map((choice) =>
+            <UserChoiceItem
+                key={choice}
+                choice={choice}
+                is_selected={choice === this.state.selected}
+                on_select={this.on_child_selected} />
+        );
+        
+        return (
+        <div className="user-choice-selector">
+            <div>{this.props.prompt}</div>
+            {this.state.submission === undefined
+              ? <div className="item-container">{selections}</div>
+              : <div>You have selected {this.state.submission}</div>
+            }
+            <button
+                type="button"
+                onClick={this.on_submit}
+                disabled={this.state.selected === undefined || this.state.submission !== undefined}>
+                    Submit
+            </button>
+        </div>
         );
     }
 }
