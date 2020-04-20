@@ -2,6 +2,25 @@
     margin-bottom: 10px;
 }
 
+.connection-indicator {
+    height: 12px;
+    width: 12px;
+    background-color: #4caf50;
+    border-radius: 50%;
+    display: inline-block;
+    margin-left: 10px;
+    animation: indicator-blink 1s linear infinite;
+}
+
+.connection-indicator.lost-connection {
+    background-color: red;
+    animation: indicator-blink 0.5s linear infinite;
+}
+
+@keyframes indicator-blink {
+    50% {opacity: 0;}
+}
+
 .progress-board {
     background-color: blue;
     height: 200px;

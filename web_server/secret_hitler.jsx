@@ -2,15 +2,62 @@ class App extends React.Component {
     constructor(props) {
         super(props);
         this.on_user_choice = this.on_user_choice.bind(this);
+        this.ws = null;
+        this.state = {
+            ws_connected: true
+        }
     }
 
+    componentDidMount() {
+        this.connect();
+    }
+
+    /* WebSocket comms functions */
+    connect() {
+        if (ws && ws.readyState !== WebSocket.CLOSED) return;
+
+        var ws = new WebSocket("ws://" + location.host + "/ws");
+        const timeout = 250;
+        var connectInterval;
+        
+        ws.onopen = () => {
+            console.log("WebSocket connection established");
+            this.ws = ws;
+            this.setState({ws_connected: true});
+            clearTimeout(connectInterval);
+        };
+
+        ws.onclose = (e) => {
+            console.log("WebSocket connection closed. Reconnecting ...");
+            this.setState({ws_connected: false});
+            connectInterval = setTimeout(this.connect.bind(this), timeout);
+        };
+
+        ws.onerror = (e) => {
+            console.error("WebSocket error. Will Retry.");
+            ws.close();
+        }
+
+        ws.onmessage = this.handle_server_update;
+    }
+
+    handle_server_update(message) {
+        console.log("Received message:\n" + message.data);
+    }
+
+    /* component-facing functions */
     async on_user_choice(choice) {
-        console.log("received user choice: " + choice);
+        console.log("sending user choice: " + choice);
+        this.ws.send(choice);
     }
 
     render() {
+        var connection_indicator_class = "connection-indicator";
+        if (!this.state.ws_connected)
+            connection_indicator_class += " lost-connection";
         return (
             <div className="app">
+                <h1>Secret Hitler<span className={connection_indicator_class}></span></h1>
                 <ProgressBoard name="Liberal" powers={["", "", "", "", ""]} />
                 <ProgressBoard name="Fascist" powers={["", "execute a player", "view something"]} />
                 <TileDeck name="Unused Tiles" size={0} />
