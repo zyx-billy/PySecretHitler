@@ -29,6 +29,11 @@ class Tile(Enum):
     LIBERAL_POLICY = 0
     FASCIST_POLICY = 1
 
+    def __str__(self):
+        if self.value == 0:
+            return "Liberal"
+        return "Fascist"
+
 class PresidentialPower(Enum):
     INVESTIGATE_LOYALTY = 0
     CALL_SPECIAL_ELECTION = 1
@@ -99,10 +104,44 @@ class Board:
         self.latest_policy : Tile = None
         self.liberal_progress : int = 0
         self.fascist_progress : int = 0
+        
+        # keeps track of updated properties
+        self.updates = set()
 
         random.shuffle(self.unused_tiles)
     
+    private_state_translations = {
+        "players": (lambda me,l: [p.name for p in l]),
+        "eliminated_players": (lambda me,l: [p.name for p in l]),
+        "president": (lambda me,id: me.players[id]),
+        "chancellor": None,
+        "nominated_chancellor": None,
+        "unused_tiles": (lambda me,l: len(l)),
+        "discarded_tiles": (lambda me,l: len(l)),
+        "drawn_tiles": (lambda me,l: [str(t) for t in l]),
+        "liberal_progress": None,
+        "fascist_progress": None,
+    }
+    
+    def register_update(self, prop):
+        self.updates.add(prop)
+
+    def extract_updates(self, custom_updates=None):
+        new_updates = custom_updates or self.updates
+        response = dict()
+        for prop in new_updates:
+            if private_state_translations[prop] is not None:
+                response[prop] = getattr(self, prop)
+            else:
+                response[prop] = private_state_translations[prop](self, getattr(self, prop))
+        self.updates = set()
+        return response
+
+    def get_full_state(self):
+        return extract_updates(self, private_state_translations.keys())
+    
     def add_player(self, name: str):
+        self.register_updates("players")
         if any(p.name == name for p in self.players):
             raise DuplicatePlayerNameError(name)
         self.players.append(Player(len(self.players), name))
@@ -114,6 +153,7 @@ class Board:
         raise NonexistentPlayerNameError(name)
     
     def assign_identities(self):
+        self.register_updates("players")
         if len(self.players) not in NUM_PLAYERS_TO_BOARD_CONFIG:
             raise InvalidNumPlayersError(len(self.players))
         
@@ -130,6 +170,7 @@ class Board:
         return self.players[self.president_id]
     
     def advance_president(self):
+        self.register_updates("president_id")
         self.prev_president = self.get_president()
         self.president_id = (president_id + 1) % len(self.players)
 
@@ -139,15 +180,21 @@ class Board:
             random.shuffle(self.discarded_tiles)
             self.unused_tiles += self.discarded_tiles
             self.discarded_tiles = []
+            self.register_updates("unused_tiles")
+            self.register_updates("discarded_tiles")
         
         self.drawn_tiles = self.unused_tiles[:3]
         self.unused_tiles = self.unused_tiles[3:]
+        self.register_updates("drawn_tiles")
+        self.register_updates("unused_tiles")
 
     def discard_tile(self, tile: Tile):
         if tile not in self.drawn_tiles:
             raise NonexistentTileError(tile)
         self.drawn_tiles.remove(tile)
         self.discarded_tiles.append(tile)
+        self.register_updates("drawn_tiles")
+        self.register_updates("discarded_tiles")
 
         if len(self.drawn_tiles) == 1:
             # enact policy
@@ -158,6 +205,7 @@ class Board:
                 self.fascist_progress += 1
             # destroy enacted tile (do not put back into any tile list)
             self.drawn_tiles = []
+            self.register_updates("drawn_tiles")
     
     def get_winner(self):
         if self.liberal_progress == LIBERAL_WINNING_PROGRESS:
