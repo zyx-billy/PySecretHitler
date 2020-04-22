@@ -104,6 +104,7 @@ class Board:
         self.latest_policy : Tile = None
         self.liberal_progress : int = 0
         self.fascist_progress : int = 0
+        self.fascist_powers: List[PresidentialPower] = None
         
         # keeps track of updated properties
         self.updates = set()
@@ -152,8 +153,9 @@ class Board:
                 return p
         raise NonexistentPlayerNameError(name)
     
-    def assign_identities(self):
+    def begin_game(self):
         self.register_updates("players")
+        self.register_updates("fascist_powers")
         if len(self.players) not in NUM_PLAYERS_TO_BOARD_CONFIG:
             raise InvalidNumPlayersError(len(self.players))
         
@@ -165,6 +167,8 @@ class Board:
 
         for i in range(len(self.players)):
             self.players[i].identity = identities[i]
+        
+        self.fascist_powers = board_config[2]
     
     def get_president(self):
         return self.players[self.president_id]

@@ -1,11 +1,47 @@
+function set_cookie(key, val) {
+    var d = new Date();
+    d.setTime(d.getTime() + (24*60*60*1000)); // expire after 1 day
+    const expires = "expires="+ d.toUTCString();
+    document.cookie = key.concat("=", val, "; ", expires);
+}
+
+function get_cookie(key) {
+    var decodedCookie = decodeURIComponent(document.cookie);
+    var cs = decodedCookie.split(';');
+    for(var i = 0; i < cs.length; i++) {
+        var pair = cs[i].split("=", 2);
+        if (key === pair[0].trim()) {
+            return pair[1].trim();
+        }
+    }
+    return null;
+}
+
 class App extends React.Component {
     constructor(props) {
         super(props);
         this.on_user_choice = this.on_user_choice.bind(this);
         this.ws = null;
         this.state = {
-            ws_connected: true
+            ws_connected: true,
+            /* player state */
+            identity: undefined,
+            prompt: undefined,
+            /* board state */
+            players: [],
+            eliminated_players: [],
+            president: undefined,
+            chancellor: undefined,
+            nominated_chancellor: null,
+            unused_tiles: undefined,
+            discarded_tiles: undefined,
+            drawn_tiles: undefined,
+            liberal_progress: 0,
+            fascist_progress: 0,
+            fascist_powers: undefined
         }
+        this.game_id = undefined;
+        this.player_id = undefined;
     }
 
     componentDidMount() {
@@ -25,6 +61,18 @@ class App extends React.Component {
             this.ws = ws;
             this.setState({ws_connected: true});
             clearTimeout(connectInterval);
+            // reconnection logic
+            const game_id = this.game_id || get_cookie("game_id");
+            const player_id = this.player_id || get_cookie("player_id");
+            if (get_cookie("game_id") && get_cookie("player_id")) {
+                ws.send(JSON.stringify({
+                    type: "reconnect",
+                    game_id: get_cookie("game_id"),
+                    player_id: get_cookie("player_id")
+                }));
+                this.update_game_id(game_id);
+                this.update_player_id(player_id);
+            }
         };
 
         ws.onclose = (e) => {
@@ -41,8 +89,42 @@ class App extends React.Component {
         ws.onmessage = this.handle_server_update;
     }
 
+    /* ws comms semantics */
     handle_server_update(message) {
         console.log("Received message:\n" + message.data);
+        const data = JSON.parse(message.data);
+        // TODO: error handling
+        if (data.type === "game_id") {
+            this.update_game_id(data.game_id);
+        } else if (data.type === "player_id") {
+            this.update_player_id(data.player_id);
+        } else if (data.type === "prompt") {
+            this.setState({
+                prompt: {
+                    action: prompt.action,
+                    prompt: prompt.prompt,
+                    choices: prompt.choices
+                }
+            });
+        } else if (data.type === "state_update") {
+            this.setState(data.updates);
+        } else if (data.type === "error") {
+            console.log("[Server Error]: " + data.msg);
+        } else if (data.type === "success") {
+            console.log("[Success]: " + data.msg);
+        } else {
+            console.log("Unrecognized response type: " + data.type);
+        }
+    }
+
+    update_game_id(game_id) {
+        set_cookie("game_id", game_id);
+        self.game_id = game_id;
+    }
+
+    update_player_id(player_id) {
+        set_cookie("player_id", player_id);
+        self.player_id = player_id;
     }
 
     /* component-facing functions */

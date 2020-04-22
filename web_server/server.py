@@ -20,12 +20,13 @@ class RequestError(Exception):
 
 class GameHandle:
     def __init__(self, host: str):
-        self.players = dict()
-        self.handles = dict()
         self.host = host
         self.game = Game()
-        self.prompts = None
-    
+        self.players = dict()   # player_id -> player_name
+        self.handles = dict()   # player_id -> ws_handle
+        self.ids = dict()       # player_name -> player_id
+        self.prompts = None     # player_name -> secret_hitler.Prompt
+
     def add_player(self, player: str, ws_handle):
         self.game.add_player(player)
         player_id = uuid.uuid4()
@@ -34,8 +35,14 @@ class GameHandle:
         self.ids[player] = player_id
         return player_id
     
-    def start_game(self):
+    def get_identity(self, player_id: str):
+        return self.game.get_identity(self.players[player_id])
+    
+    def begin_game(self):
         self.game.begin_game()
+        # send identities to every player
+        for player in self.players:
+            self.handles[self.ids[player]].send_new_prompt(self.game.get_identity(player))
     
     def perform_action(self, player, action, choice):
         # check if user is authorized
@@ -52,6 +59,12 @@ class GameHandle:
         # send prompt to users who need prompts
         for prompt_player in prompts:
             self.handles[self.ids[prompt_player]].send_new_prompt(prompts[prompt_player])
+    
+    def get_prompt_of_player(self, player_id):
+        player = self.players[player_id]
+        if player not in self.prompts:
+            return None
+        return self.prompts[player]
 
 
 class WSHandler(tornado.websocket.WebSocketHandler):
@@ -80,6 +93,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 self.player_id = self.game.add_player(request.host, self)
                 games[new_game_id] = self.game
                 respond_to_success("Game created successfully.")
+                send_game_id(new_game_id)
                 return
             
             if request.type == "reconnect":
@@ -88,6 +102,9 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 self.player_id = request.player_id
                 # send full state to get client up to date
                 send_state_update(self.game.get_full_state())
+                send_player_identity()
+                # send current prompt if there exists one
+                send_new_prompt(self.game.get_prompt_of_player(self.player_id))
                 return
             
             if request.type == "join_game":
@@ -95,16 +112,18 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 ensure_properties(request, ["player_name"])
                 if request.player_name in self.game:
                     respond_to_error("Cannot join. User name already exists in game.")
-                player_id = self.game.add_player(request.player_name, self)
-                respond_to_success(f"Joined game. Currently {len(self.game.players)} players in game.", {
-                    "player_id": player_id
-                })
+                self.player_id = self.game.add_player(request.player_name, self)
+                respond_to_success(f"Joined game. Currently {len(self.game.players)} players in game.")
+                return
+            
+            if request.type == "begin_game":
+                self.game.begin_game()
                 return
             
             if request.type == "user_action":
                 ensure_properties(request, ["action", "choice"])
                 self.game.perform_action(self.player, request.action, request.choice)
-                respond_to_success("Action performed successfully.")
+                respond_to_success(f"Action {request.action} performed successfully.")
 
         except RequestError as err:
             respond_to_error(str(err))
@@ -112,6 +131,11 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             respond_to_error(str(err))
         except:
             respond_to_error("Unknown exception occurred")
+
+    def send_player_identity(self, identity = self.game.get_identity(self.player_id)):
+        send_state_update({
+            "identity": identity
+        })
     
     def send_state_update(self, updates):
         self.write_message(json.dumps({
@@ -125,6 +149,18 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             "action": prompt.method,
             "prompt": prompt.prompt_str,
             "choices": prompt.choices
+        }))
+
+    def send_game_id(self, game_id):
+        self.write_message(json.dumps({
+            "type": "game_id",
+            "game_id": game_id
+        }))
+    
+    def send_player_id(self):
+        self.write_message(json.dumps({
+            "type": "player_id",
+            "player_id": self.player_id
         }))
 
     def safe_get_game(self, request):

@@ -41,6 +41,10 @@ class Game:
     def shift_state(self, state: Stage):
         self.state = state
     
+    def requires_game_started(self):
+        if self.state == Stage.NEW_GAME:
+            raise CommandStateError("Any other state", self.state)
+    
     def gen_response(self):
         prompts = Prompts()
         if self.state == Stage.NEW_GAME:
@@ -74,7 +78,12 @@ class Game:
         return (prompts, self.board.extract_updates())
 
     def get_full_state(self):
+        requires_game_started()
         return self.board.get_full_state()
+    
+    def get_identity(self, name):
+        requires_game_started()
+        return str(self.board.get_player(name).identity)
 
     def add_player(self, name: str):
         requires_state(Stage.NEW_GAME)
@@ -84,7 +93,7 @@ class Game:
     
     def begin_game(self):
         requires_state(Stage.NEW_GAME)
-        self.board.assign_identities()
+        self.board.begin_game()
         shift_state(Stage.NEW_PRESIDENT)
         return gen_response()
 
