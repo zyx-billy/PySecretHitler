@@ -26,9 +26,11 @@ class App extends React.Component {
         this.state = {
             ws_connected: true,
             status: AppStatus.new_or_join,
+            is_host: false,
             /* player state */
             identity: undefined,
             prompt: undefined,
+            prompt_key: 0, // for fully controlling the prompt component
             /* board state */
             players: [],
             eliminated_players: [],
@@ -44,12 +46,12 @@ class App extends React.Component {
         }
         this.game_id = undefined;
         this.player_id = undefined;
-        this.is_host = false;
 
         this.on_user_choice = this.on_user_choice.bind(this);
         this.on_new_game_submit = this.on_new_game_submit.bind(this);
         this.on_join_game_submit = this.on_join_game_submit.bind(this);
         this.on_begin_game_submit = this.on_begin_game_submit.bind(this);
+        this.connect = this.connect.bind(this);
     }
 
     componentDidMount() {
@@ -86,7 +88,7 @@ class App extends React.Component {
         ws.onclose = (e) => {
             console.log("WebSocket connection closed. Reconnecting ...");
             this.setState({ws_connected: false});
-            connectInterval = setTimeout(this.connect.bind(this), timeout);
+            connectInterval = setTimeout(this.connect, timeout);
         };
 
         ws.onerror = (e) => {
@@ -94,7 +96,7 @@ class App extends React.Component {
             ws.close();
         }
 
-        ws.onmessage = this.handle_server_update;
+        ws.onmessage = this.handle_server_update.bind(this);
     }
 
     /* ws comms semantics */
@@ -113,15 +115,21 @@ class App extends React.Component {
             this.setState({
                 status: AppStatus.begun
             });
+        } else if (data.type == "is_host") {
+            this.setState({
+                is_host: true
+            });
         } else if (data.type === "prompt") {
             this.setState({
                 prompt: {
-                    action: prompt.action,
-                    prompt: prompt.prompt,
-                    choices: prompt.choices
-                }
+                    action: data.action,
+                    prompt: data.prompt,
+                    choices: data.choices
+                },
+                prompt_key: this.state.prompt_key + 1
             });
         } else if (data.type === "state_update") {
+            console.log("updates: " + JSON.stringify(data.updates))
             this.setState(data.updates);
         } else if (data.type === "error") {
             console.log("[Server Error]: " + data.msg);
@@ -145,11 +153,15 @@ class App extends React.Component {
     /* component-facing functions */
     async on_user_choice(choice) {
         console.log("sending user choice: " + choice);
-        this.ws.send(choice);
+        this.ws.send(JSON.stringify({
+            type: "user_action",
+            action: this.state.prompt.action,
+            choice: choice
+        }));
     }
 
     on_new_game_submit(host) {
-        this.is_host = true;
+        this.setState({is_host: true});
         this.ws.send(JSON.stringify({
             type: "new_game",
             host: host
@@ -160,7 +172,7 @@ class App extends React.Component {
         this.ws.send(JSON.stringify({
             type: "join_game",
             game_id: game_id,
-            player_id: player_id
+            player_name: player_name
         }));
     }
 
@@ -191,12 +203,23 @@ class App extends React.Component {
             return (
                 <div className="pre-game">
                     <h1>Welcome to Secret Hitler<span className={connection_indicator_class}></span></h1>
-                    <p>Waiting for users to join:</p>
+                    <p>Your Game ID: {this.game_id}</p>
+                    <p>Waiting for users to join.</p>
                     <WaitingRoomPlayers
-                        is_host={this.is_host}
+                        is_host={this.state.is_host}
                         players={this.state.players}
                         on_begin_game_submit={this.on_begin_game_submit} />
                 </div>
+            );
+        }
+
+        const dependents = this.state.fascist_powers !== undefined
+                        && this.state.unused_tiles !== undefined
+                        && this.state.discarded_tiles !== undefined
+                        && this.state.president !== undefined;
+        if (!dependents) {
+            return (
+                <p>Loading...</p>
             );
         }
         
@@ -216,10 +239,13 @@ class App extends React.Component {
                 <PlayerContainer
                     live_players={this.state.players}
                     dead_players={this.state.eliminated_players} />
-                <UserChoiceSelector
-                    on_user_choice={this.on_user_choice}
-                    prompt={this.state.prompt.prompt}
-                    choices={this.state.prompt.choices} />
+                {!this.state.prompt ? "" :
+                    <UserChoiceSelector
+                        key={this.state.prompt_key}
+                        on_user_choice={this.on_user_choice}
+                        prompt={this.state.prompt.prompt}
+                        choices={this.state.prompt.choices} />
+                }
             </div>
         );
     }
@@ -319,9 +345,9 @@ class WaitingRoomPlayers extends React.Component {
     }
 
     render() {
-        const players = this.props.players.map((name) => {
-            <span>name</span>
-        });
+        const waiting_players = this.props.players.map((name) => (
+            <span key={name}>{name}</span>
+        ));
         const conditional_begin_game_button = this.props.is_host ? (
             <form onSubmit={this.handleSubmit} name="">
                 <input type="submit" value="Start Game!" disabled={this.state.submitted} />
@@ -330,7 +356,7 @@ class WaitingRoomPlayers extends React.Component {
         return (
             <div className="waiting-room">
                 <p>Users online:</p>
-                <p>{players}</p>
+                <p>{waiting_players}</p>
                 {conditional_begin_game_button}
             </div>
         );
@@ -488,7 +514,6 @@ class UserChoiceSelector extends React.Component {
             this.props.on_user_choice(state.selected);
             return {submission: state.selected};
         });
-        
     }
 
     render() {
@@ -501,19 +526,19 @@ class UserChoiceSelector extends React.Component {
         );
         
         return (
-        <div className="user-choice-selector">
-            <div>{this.props.prompt}</div>
-            {this.state.submission === undefined
-              ? <div className="item-container">{selections}</div>
-              : <div>You have selected {this.state.submission}</div>
-            }
-            <button
-                type="button"
-                onClick={this.on_submit}
-                disabled={this.state.selected === undefined || this.state.submission !== undefined}>
-                    Submit
-            </button>
-        </div>
+            <div className="user-choice-selector">
+                <div>{this.props.prompt}</div>
+                {this.state.submission === undefined
+                ? <div className="item-container">{selections}</div>
+                : <div>You have selected {this.state.submission}</div>
+                }
+                <button
+                    type="button"
+                    onClick={this.on_submit}
+                    disabled={this.state.selected === undefined || this.state.submission !== undefined}>
+                        Submit
+                </button>
+            </div>
         );
     }
 }

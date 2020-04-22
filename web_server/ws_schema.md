@@ -37,6 +37,9 @@ Informs of the player_id assigned to the player represented by this client.
 ### game_begun
 Informs of the start of the game.
 
+### is_host
+Informs the recipient that they are the host (in case the host re-connected).
+
 ### prompt
 Prompt for the next action the user need to perform.
 - action: string. The name of the action.

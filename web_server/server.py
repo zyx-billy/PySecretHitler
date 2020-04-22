@@ -20,52 +20,66 @@ class RequestError(Exception):
 
 class GameHandle:
     def __init__(self, host: str):
-        self.host = host
+        self.host = host        # player_name of host
         self.game = Game()
         self.players = dict()   # player_id -> player_name
         self.handles = dict()   # player_id -> ws_handle
         self.ids = dict()       # player_name -> player_id
-        self.prompts = None     # player_name -> secret_hitler.Prompt
+        self.prompts = dict()   # player_name -> secret_hitler.Prompt
+        self.has_begun = False
 
     def add_player(self, player: str, ws_handle):
         self.game.add_player(player)
-        player_id = uuid.uuid4()
+        player_id = str(uuid.uuid4())
         self.players[player_id] = player
         self.handles[player_id] = ws_handle
         self.ids[player] = player_id
 
         # broadcast updated player list to everyone
-        for player in self.players:
-            self.handles[self.ids[player]].send_state_update({
-                "players": list(self.players.keys())
+        for player_id in self.players.keys():
+            self.handles[player_id].send_state_update({
+                "players": list(self.players.values())
             })
         
         return player_id
     
     def get_identity(self, player_id: str):
         return self.game.get_identity(self.players[player_id])
-    
-    def begin_game(self):
-        self.game.begin_game()
-        # send identities to every player
-        for player in self.players:
-            self.handles[self.ids[player]].send_new_prompt(self.game.get_identity(player))
-    
-    def perform_action(self, player, action, choice):
-        # check if user is authorized
-        if self.players[player] not in self.prompts:
-            raise RequestError("Cannot perform request. Unauthorized to do so.")
-        (prompts, state_updates) = getattr(self.game, action)(choice)
 
-        # send state updates to everyone
-        for ws in self.handles.values():
-            ws.send_state_updates(state_updates)
-        
+    def get_full_state(self):
+        return self.game.get_full_state()
+
+    def update_prompts(self, prompts):
+        print("updating prompts to: " + str(prompts))
         # update internal prompt store
         self.prompts = prompts
         # send prompt to users who need prompts
         for prompt_player in prompts:
             self.handles[self.ids[prompt_player]].send_new_prompt(prompts[prompt_player])
+    
+    def begin_game(self):
+        (prompts, state_updates) = self.game.begin_game()
+        self.has_begun = True
+        # send identities to every player. Broadcast game_begun & full_state (ignore state_updates)
+        full_state = self.get_full_state()
+        for player_id in self.players.keys():
+            self.handles[player_id].send_player_identity(self.game.get_identity(self.players[player_id]))
+            self.handles[player_id].send_game_begun()
+            self.handles[player_id].send_state_update(full_state)
+        # send prompts
+        self.update_prompts(prompts)
+    
+    def perform_action(self, player_id, action, choice):
+        # check if user is authorized
+        if self.players[player_id] not in self.prompts:
+            raise RequestError("Cannot perform request. Unauthorized to do so.")
+        (prompts, state_updates) = getattr(self.game, action)(choice)
+
+        # send state updates to everyone
+        for ws in self.handles.values():
+            ws.send_state_update(state_updates)
+        
+        self.update_prompts(prompts)
     
     def get_prompt_of_player(self, player_id):
         player = self.players[player_id]
@@ -95,32 +109,47 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 self.ensure_properties(request, ["host"])
                 if len(games) >= MAX_GAMES_ALLOWED:
                     respond_to_error("Cannot create game. Server at max capacity.")
-                new_game_id = uuid.uuid4()
+                new_game_id = str(uuid.uuid4())
                 self.game = GameHandle(request["host"])
                 self.player_id = self.game.add_player(request["host"], self)
                 games[new_game_id] = self.game
                 self.respond_to_success("Game created successfully.")
                 self.send_game_id(new_game_id)
+                self.send_player_id()
                 return
             
             if request["type"] == "reconnect":
-                self.game = safe_get_game(request)
+                self.game = self.safe_get_game(request)
                 self.safe_get_player(request) # makes sure player_id exists in self.game
                 self.player_id = request["player_id"]
-                # send full state to get client up to date
-                self.send_state_update(self.game.get_full_state())
-                self.send_player_identity()
-                # send current prompt if there exists one
-                self.send_new_prompt(self.game.get_prompt_of_player(self.player_id))
+                if self.game.has_begun:
+                    # send game_begun to send client into game proper
+                    self.send_game_begun()
+                    # send full state to get client up to date
+                    self.send_state_update(self.game.get_full_state())
+                    self.send_player_identity()
+                    # send current prompt if there exists one
+                    self.send_new_prompt(self.game.get_prompt_of_player(self.player_id))
+                else:
+                    # send player_id to send client into waiting room
+                    self.send_player_id()
+                    # if player is host, send is_host
+                    if self.game.host == self.game.players[self.player_id]:
+                        self.send_is_host()
+                    # send waiting room players
+                    self.send_state_update({
+                        "players": list(self.game.players.values())
+                    })
                 return
             
             if request["type"] == "join_game":
-                self.game = safe_get_game(request)
+                self.game = self.safe_get_game(request)
                 self.ensure_properties(request, ["player_name"])
-                if request["player_name"] in self.game:
+                if request["player_name"] in self.game.players.values():
                     respond_to_error("Cannot join. User name already exists in game.")
                 self.player_id = self.game.add_player(request["player_name"], self)
                 self.respond_to_success(f"Joined game. Currently {len(self.game.players)} players in game.")
+                self.send_game_id(request["game_id"])
                 self.send_player_id()
                 return
             
@@ -130,7 +159,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             
             if request["type"] == "user_action":
                 self.ensure_properties(request, ["action", "choice"])
-                self.game.perform_action(self.player, request["action"], request["choice"])
+                self.game.perform_action(self.player_id, request["action"], request["choice"])
                 action = request["action"]
                 self.respond_to_success(f"Action {action} performed successfully.")
 
@@ -138,8 +167,8 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             self.respond_to_error(str(err))
         except GameError as err:
             self.respond_to_error(str(err))
-        except Exception as err:
-            self.respond_to_error("Unknown exception occurred: " + str(err))
+        # except Exception as err:
+        #     self.respond_to_error("Unknown exception occurred: " + str(err))
 
     def send_player_identity(self, identity = None):
         identity = identity or self.game.get_identity(self.player_id)
@@ -153,18 +182,21 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         }))
     
     def send_state_update(self, updates):
+        print("sending update: " + str(updates))
         self.write_message(json.dumps({
             "type": "state_update",
             "updates": updates
         }))
     
     def send_new_prompt(self, prompt):
-        self.write_message(json.dumps({
-            "type": "prompt",
-            "action": prompt.method,
-            "prompt": prompt.prompt_str,
-            "choices": prompt.choices
-        }))
+        print("sending prompt: " + str(prompt))
+        if prompt:
+            self.write_message(json.dumps({
+                "type": "prompt",
+                "action": prompt.method,
+                "prompt": prompt.prompt_str,
+                "choices": prompt.choices
+            }))
 
     def send_game_id(self, game_id):
         self.write_message(json.dumps({
@@ -176,6 +208,11 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         self.write_message(json.dumps({
             "type": "player_id",
             "player_id": self.player_id
+        }))
+
+    def send_is_host(self):
+        self.write_message(json.dumps({
+            "type": "is_host"
         }))
 
     def safe_get_game(self, request):

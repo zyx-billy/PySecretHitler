@@ -2,7 +2,7 @@ from enum import Enum
 import random
 from typing import List
 
-from secret_hitler.exceptions import GameError
+from secret_hitler.exceptions import GameError, UnreachableStateError
 from secret_hitler.player import Player, Identity
 
 class DuplicatePlayerNameError(GameError):
@@ -30,9 +30,11 @@ class Tile(Enum):
     FASCIST_POLICY = 1
 
     def __str__(self):
-        if self.value == 0:
+        if self == Tile.LIBERAL_POLICY:
             return "Liberal"
-        return "Fascist"
+        elif self == Tile.FASCIST_POLICY:
+            return "Fascist"
+        raise UnreachableStateError("Invalid Tile Enum value")
 
 class PresidentialPower(Enum):
     INVESTIGATE_LOYALTY = 0
@@ -40,8 +42,26 @@ class PresidentialPower(Enum):
     POLICY_PEEK = 2
     EXECUTION = 3
 
+    def __str__(self):
+        if self == PresidentialPower.INVESTIGATE_LOYALTY:
+            return "The President investigates a player's identity card"
+        elif self == PresidentialPower.CALL_SPECIAL_ELECTION:
+            return "The President picks the next presidential candidate"
+        elif self == PresidentialPower.POLICY_PEEK:
+            return "The President examines the top three cards"
+        elif self == PresidentialPower.EXECUTION:
+            return "The President must kill a player"
+        raise UnreachableStateError("Invalid PresidentialPower Enum value")
+
 # num_players -> num_liberals, num_fascists, presidential_powers
 NUM_PLAYERS_TO_BOARD_CONFIG = {
+    2: (1,0,
+        [None,
+         None,
+         PresidentialPower.POLICY_PEEK,
+         PresidentialPower.EXECUTION,
+         PresidentialPower.EXECUTION,
+         None]),
     5: (3,1,
         [None,
          None,
@@ -93,7 +113,7 @@ class Board:
     def __init__(self):
         self.players : List[Player] = []              # active players only
         self.eliminated_players : List[Player] = []
-        self.president_id : int = 0
+        self.president_idx : int = 0
         self.chancellor : Player = None
         self.prev_president : Player = None
         self.prev_chancellor : Player = None
@@ -114,14 +134,14 @@ class Board:
     private_state_translations = {
         "players": (lambda me,l: [p.name for p in l]),
         "eliminated_players": (lambda me,l: [p.name for p in l]),
-        "president": (lambda me,id: me.players[id]),
-        "chancellor": None,
-        "nominated_chancellor": None,
+        "president_idx": ("president", (lambda me,id: me.players[id].name)),
+        "chancellor": (lambda me,c: c and c.name),
         "unused_tiles": (lambda me,l: len(l)),
         "discarded_tiles": (lambda me,l: len(l)),
         "drawn_tiles": (lambda me,l: [str(t) for t in l]),
         "liberal_progress": None,
         "fascist_progress": None,
+        "fascist_powers": (lambda me,l: [str(p) for p in l])
     }
     
     def register_update(self, prop):
@@ -131,15 +151,22 @@ class Board:
         new_updates = custom_updates or self.updates
         response = dict()
         for prop in new_updates:
-            if private_state_translations[prop] is not None:
+            if prop not in Board.private_state_translations:
+                continue
+            
+            elif Board.private_state_translations[prop] is None:
                 response[prop] = getattr(self, prop)
+            elif type(Board.private_state_translations[prop]) is not tuple:
+                response[prop] = Board.private_state_translations[prop](self, getattr(self, prop))
             else:
-                response[prop] = private_state_translations[prop](self, getattr(self, prop))
+                (alias, transformer) = Board.private_state_translations[prop]
+                response[alias] = transformer(self, getattr(self, prop))
+                
         self.updates = set()
         return response
 
     def get_full_state(self):
-        return self.extract_updates(self, private_state_translations.keys())
+        return self.extract_updates(Board.private_state_translations.keys())
     
     def add_player(self, name: str):
         self.register_update("players")
@@ -171,12 +198,12 @@ class Board:
         self.fascist_powers = board_config[2]
     
     def get_president(self):
-        return self.players[self.president_id]
+        return self.players[self.president_idx]
     
     def advance_president(self):
-        self.register_update("president_id")
+        self.register_update("president_idx")
         self.prev_president = self.get_president()
-        self.president_id = (president_id + 1) % len(self.players)
+        self.president_idx = (president_idx + 1) % len(self.players)
 
     def draw_three_tiles(self):
         if len(self.unused_tiles) < 3:

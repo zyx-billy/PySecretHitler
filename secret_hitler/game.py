@@ -60,7 +60,7 @@ class Game:
             for player in self.board.players:
                 prompts.add(player,
                             method="vote_for_chancellor",
-                            prompt_str="Vote for chancellor",
+                            prompt_str=f"Vote for chancellor: {self.board.nominated_chancellor}",
                             choices=["ja","nein"])
         elif self.state == Stage.PRESIDENT_DECIDES_LEGISLATION:
             # president discards a tile
@@ -75,7 +75,7 @@ class Game:
                         prompt_str="Discard a policy tile",
                         choices=map(str, self.board.drawn_tiles))
         
-        return (prompts, self.board.extract_updates())
+        return (prompts.get_dict(), self.board.extract_updates())
 
     def get_full_state(self):
         self.requires_game_started()
