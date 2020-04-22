@@ -33,6 +33,13 @@ class GameHandle:
         self.players[player_id] = player
         self.handles[player_id] = ws_handle
         self.ids[player] = player_id
+
+        # broadcast updated player list to everyone
+        for player in self.players:
+            self.handles[self.ids[player]].send_state_update({
+                "players": list(self.players.keys())
+            })
+        
         return player_id
     
     def get_identity(self, player_id: str):
@@ -82,60 +89,68 @@ class WSHandler(tornado.websocket.WebSocketHandler):
     def on_message(self, message):
         try:
             request = json.loads(message)
-            ensure_properties(request, ["type"])
+            self.ensure_properties(request, ["type"])
 
-            if request.type == "new_game":
-                ensure_properties(request, ["host"])
+            if request["type"] == "new_game":
+                self.ensure_properties(request, ["host"])
                 if len(games) >= MAX_GAMES_ALLOWED:
                     respond_to_error("Cannot create game. Server at max capacity.")
                 new_game_id = uuid.uuid4()
-                self.game = GameHandle(request.host)
-                self.player_id = self.game.add_player(request.host, self)
+                self.game = GameHandle(request["host"])
+                self.player_id = self.game.add_player(request["host"], self)
                 games[new_game_id] = self.game
-                respond_to_success("Game created successfully.")
-                send_game_id(new_game_id)
+                self.respond_to_success("Game created successfully.")
+                self.send_game_id(new_game_id)
                 return
             
-            if request.type == "reconnect":
+            if request["type"] == "reconnect":
                 self.game = safe_get_game(request)
-                safe_get_player(request) # makes sure player_id exists in self.game
-                self.player_id = request.player_id
+                self.safe_get_player(request) # makes sure player_id exists in self.game
+                self.player_id = request["player_id"]
                 # send full state to get client up to date
-                send_state_update(self.game.get_full_state())
-                send_player_identity()
+                self.send_state_update(self.game.get_full_state())
+                self.send_player_identity()
                 # send current prompt if there exists one
-                send_new_prompt(self.game.get_prompt_of_player(self.player_id))
+                self.send_new_prompt(self.game.get_prompt_of_player(self.player_id))
                 return
             
-            if request.type == "join_game":
+            if request["type"] == "join_game":
                 self.game = safe_get_game(request)
-                ensure_properties(request, ["player_name"])
-                if request.player_name in self.game:
+                self.ensure_properties(request, ["player_name"])
+                if request["player_name"] in self.game:
                     respond_to_error("Cannot join. User name already exists in game.")
-                self.player_id = self.game.add_player(request.player_name, self)
-                respond_to_success(f"Joined game. Currently {len(self.game.players)} players in game.")
+                self.player_id = self.game.add_player(request["player_name"], self)
+                self.respond_to_success(f"Joined game. Currently {len(self.game.players)} players in game.")
+                self.send_player_id()
                 return
             
-            if request.type == "begin_game":
+            if request["type"] == "begin_game":
                 self.game.begin_game()
                 return
             
-            if request.type == "user_action":
-                ensure_properties(request, ["action", "choice"])
-                self.game.perform_action(self.player, request.action, request.choice)
-                respond_to_success(f"Action {request.action} performed successfully.")
+            if request["type"] == "user_action":
+                self.ensure_properties(request, ["action", "choice"])
+                self.game.perform_action(self.player, request["action"], request["choice"])
+                action = request["action"]
+                self.respond_to_success(f"Action {action} performed successfully.")
 
         except RequestError as err:
-            respond_to_error(str(err))
+            self.respond_to_error(str(err))
         except GameError as err:
-            respond_to_error(str(err))
-        except:
-            respond_to_error("Unknown exception occurred")
+            self.respond_to_error(str(err))
+        except Exception as err:
+            self.respond_to_error("Unknown exception occurred: " + str(err))
 
-    def send_player_identity(self, identity = self.game.get_identity(self.player_id)):
-        send_state_update({
+    def send_player_identity(self, identity = None):
+        identity = identity or self.game.get_identity(self.player_id)
+        self.send_state_update({
             "identity": identity
         })
+
+    def send_game_begun(self):
+        self.write_message(json.dumps({
+            "type": "game_begun"
+        }))
     
     def send_state_update(self, updates):
         self.write_message(json.dumps({
@@ -164,16 +179,16 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         }))
 
     def safe_get_game(self, request):
-        ensure_properties(request, ["game_id"])
-        if request.game_id not in games:
+        self.ensure_properties(request, ["game_id"])
+        if request["game_id"] not in games:
             raise RequestError("Game does not exist.")
-        return games[request.game_id]
+        return games[request["game_id"]]
     
     def safe_get_player(self, request):
-        ensure_properties(request, ["player_id"])
-        if request.player_id not in self.game.players:
+        self.ensure_properties(request, ["player_id"])
+        if request["player_id"] not in self.game.players:
             raise RequestError("Player does not exist")
-        return self.game.players[request.player_id]
+        return self.game.players[request["player_id"]]
     
     def ensure_properties(self, request, props: List[str]):
         for prop in props:

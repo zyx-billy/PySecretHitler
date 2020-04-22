@@ -9,6 +9,7 @@ Create a new game.
 ### join_game
 Join an existing game.
 - game_id: string. ID of the game to join.
+- player_name: string. Name of the joining player.
 
 ### reconnect
 Reconnect to a previously connected game.
@@ -32,6 +33,9 @@ Informs about the game id of the newly created game.
 ### player_id
 Informs of the player_id assigned to the player represented by this client.
 - player_id: string. The ID assigned to the player.
+
+### game_begun
+Informs of the start of the game.
 
 ### prompt
 Prompt for the next action the user need to perform.

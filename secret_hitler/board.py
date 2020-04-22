@@ -139,10 +139,10 @@ class Board:
         return response
 
     def get_full_state(self):
-        return extract_updates(self, private_state_translations.keys())
+        return self.extract_updates(self, private_state_translations.keys())
     
     def add_player(self, name: str):
-        self.register_updates("players")
+        self.register_update("players")
         if any(p.name == name for p in self.players):
             raise DuplicatePlayerNameError(name)
         self.players.append(Player(len(self.players), name))
@@ -154,8 +154,8 @@ class Board:
         raise NonexistentPlayerNameError(name)
     
     def begin_game(self):
-        self.register_updates("players")
-        self.register_updates("fascist_powers")
+        self.register_update("players")
+        self.register_update("fascist_powers")
         if len(self.players) not in NUM_PLAYERS_TO_BOARD_CONFIG:
             raise InvalidNumPlayersError(len(self.players))
         
@@ -174,7 +174,7 @@ class Board:
         return self.players[self.president_id]
     
     def advance_president(self):
-        self.register_updates("president_id")
+        self.register_update("president_id")
         self.prev_president = self.get_president()
         self.president_id = (president_id + 1) % len(self.players)
 
@@ -184,21 +184,21 @@ class Board:
             random.shuffle(self.discarded_tiles)
             self.unused_tiles += self.discarded_tiles
             self.discarded_tiles = []
-            self.register_updates("unused_tiles")
-            self.register_updates("discarded_tiles")
+            self.register_update("unused_tiles")
+            self.register_update("discarded_tiles")
         
         self.drawn_tiles = self.unused_tiles[:3]
         self.unused_tiles = self.unused_tiles[3:]
-        self.register_updates("drawn_tiles")
-        self.register_updates("unused_tiles")
+        self.register_update("drawn_tiles")
+        self.register_update("unused_tiles")
 
     def discard_tile(self, tile: Tile):
         if tile not in self.drawn_tiles:
             raise NonexistentTileError(tile)
         self.drawn_tiles.remove(tile)
         self.discarded_tiles.append(tile)
-        self.register_updates("drawn_tiles")
-        self.register_updates("discarded_tiles")
+        self.register_update("drawn_tiles")
+        self.register_update("discarded_tiles")
 
         if len(self.drawn_tiles) == 1:
             # enact policy
@@ -209,7 +209,7 @@ class Board:
                 self.fascist_progress += 1
             # destroy enacted tile (do not put back into any tile list)
             self.drawn_tiles = []
-            self.register_updates("drawn_tiles")
+            self.register_update("drawn_tiles")
     
     def get_winner(self):
         if self.liberal_progress == LIBERAL_WINNING_PROGRESS:
@@ -223,5 +223,4 @@ class Board:
             return None
         if self.fascist_progress == 0:
             return None
-        presidential_powers = NUM_PLAYERS_TO_BOARD_CONFIG[len(self.players)] # guaranteed to be in range by now
-        return presidential_powers[self.fascist_progress - 1]
+        return self.fascist_powers[self.fascist_progress - 1]

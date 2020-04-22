@@ -1,4 +1,19 @@
-.app > div {
+/* pre-game */
+.new-or-join {
+    display: flex;
+    flex-direction: column;
+}
+
+.new-or-join label {
+    margin-right: 5px;
+}
+
+.waiting-room span {
+    margin-right: 5px;
+}
+
+/* game proper */
+.game > div {
     margin-bottom: 10px;
 }
 
@@ -81,6 +96,11 @@
 
 .player-info.position-chancellor {
     background-color: brown;
+}
+
+.player-info.eliminated {
+    background-color: black;
+    color: white;
 }
 
 .user-choice-selector {

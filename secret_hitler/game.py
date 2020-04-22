@@ -78,27 +78,27 @@ class Game:
         return (prompts, self.board.extract_updates())
 
     def get_full_state(self):
-        requires_game_started()
+        self.requires_game_started()
         return self.board.get_full_state()
     
     def get_identity(self, name):
-        requires_game_started()
+        self.requires_game_started()
         return str(self.board.get_player(name).identity)
 
     def add_player(self, name: str):
-        requires_state(Stage.NEW_GAME)
+        self.requires_state(Stage.NEW_GAME)
         self.board.add_player(name)
-        shift_state(Stage.NEW_GAME)
-        return gen_response()
+        self.shift_state(Stage.NEW_GAME)
+        return self.gen_response()
     
     def begin_game(self):
-        requires_state(Stage.NEW_GAME)
+        self.requires_state(Stage.NEW_GAME)
         self.board.begin_game()
-        shift_state(Stage.NEW_PRESIDENT)
-        return gen_response()
+        self.shift_state(Stage.NEW_PRESIDENT)
+        return self.gen_response()
 
     def nominate_chancellor(self, nominee: str):
-        requires_state(Stage.NEW_PRESIDENT)
+        self.requires_state(Stage.NEW_PRESIDENT)
         if nominee == self.board.get_president():
             raise InvalidCommandError(self.state, "nominate_chancellor",
                                       "Chancellor cannot be the same as current president")
@@ -109,11 +109,11 @@ class Game:
             raise InvalidCommandError(self.state, "nominate_chancellor",
                                       "Chancellor cannot be the same as previous president")
         self.board.nominated_chancellor = self.board.get_player(nominee)
-        shift_state(Stage.CHANCELLOR_NOMINATED)
-        return gen_response()
+        self.shift_state(Stage.CHANCELLOR_NOMINATED)
+        return self.gen_response()
     
     def vote_for_chancellor(self, votes: List[str]):
-        requires_state(Stage.CHANCELLOR_NOMINATED)
+        self.requires_state(Stage.CHANCELLOR_NOMINATED)
         if len(votes) != len(self.board.players):
             raise InvalidCommandError(self.state, "vote_for_chancellor",
                                       f"Number of votes ({len(votes)}) does not equal number of active players "
@@ -125,34 +125,34 @@ class Game:
             self.board.chancellor = self.board.nominated_chancellor
             self.board.nominated_chancellor = None
             self.board.draw_three_tiles()
-            shift_state(Stage.PRESIDENT_DECIDES_LEGISLATION)
-            return gen_response()
+            self.shift_state(Stage.PRESIDENT_DECIDES_LEGISLATION)
+            return self.gen_response()
         
         # vote failed
         self.board.nominated_chancellor = None
-        shift_state(Stage.NEW_PRESIDENT)
-        return gen_response()
+        self.shift_state(Stage.NEW_PRESIDENT)
+        return self.gen_response()
 
     def president_discards_tile(self, tile: Tile):
-        requires_state(Stage.PRESIDENT_DECIDES_LEGISLATION)
+        self.requires_state(Stage.PRESIDENT_DECIDES_LEGISLATION)
         self.board.discard_tile(tile)
-        shift_state(Stage.CHANCELLOR_DECIDES_LEGISLATION)
-        return gen_response()
+        self.shift_state(Stage.CHANCELLOR_DECIDES_LEGISLATION)
+        return self.gen_response()
 
     def chancellor_discards_tile(self, tile: Tile):
-        requires_state(Stage.CHANCELLOR_DECIDES_LEGISLATION)
+        self.requires_state(Stage.CHANCELLOR_DECIDES_LEGISLATION)
         self.board.discard_tile(tile)
         # check game status
         self.winner = self.board.get_winner()
         if self.winner:
-            shift_state(Stage.GAME_OVER)
-            return gen_response()
+            self.shift_state(Stage.GAME_OVER)
+            return self.gen_response()
         
         if self.board.get_current_presidential_power:
-            shift_state(Stage.PERFORM_PRESIDENTIAL_POWER)
-            return gen_response()
+            self.shift_state(Stage.PERFORM_PRESIDENTIAL_POWER)
+            return self.gen_response()
         
         # no winner and no presidential power, shift president
         self.board.advance_president()
-        shift_state(Stage.NEW_PRESIDENT)
-        return gen_response()
+        self.shift_state(Stage.NEW_PRESIDENT)
+        return self.gen_response()
