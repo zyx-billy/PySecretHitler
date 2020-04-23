@@ -60,14 +60,14 @@ class GameHandle:
     def begin_game(self):
         (prompts, state_updates) = self.game.begin_game()
         self.has_begun = True
+        # send prompts
+        self.update_prompts(prompts)
         # send identities to every player. Broadcast game_begun & full_state (ignore state_updates)
         full_state = self.get_full_state()
         for player_id in self.players.keys():
             self.handles[player_id].send_player_identity(self.game.get_identity(self.players[player_id]))
             self.handles[player_id].send_game_begun()
             self.handles[player_id].send_state_update(full_state)
-        # send prompts
-        self.update_prompts(prompts)
     
     def perform_action(self, player_id, action, choice):
         # check if user is authorized
@@ -75,13 +75,13 @@ class GameHandle:
             raise RequestError("Cannot perform request. Unauthorized to do so.")
         (prompts, state_updates) = getattr(self.game, action)(choice)
 
+        if prompts:
+            self.update_prompts(prompts)
+
         if state_updates:
             # send state updates to everyone
             for ws in self.handles.values():
                 ws.send_state_update(state_updates)
-        
-        if prompts:
-            self.update_prompts(prompts)
     
     def get_prompt_of_player(self, player_id):
         player = self.players[player_id]
@@ -172,6 +172,12 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         # except Exception as err:
         #     self.respond_to_error("Unknown exception occurred: " + str(err))
 
+    def safe_send(self, obj):
+        try:
+            self.write_message(json.dumps(obj))
+        except Exception as err:
+            print("Encountered error during ws send: " + str(err))
+
     def send_player_identity(self, identity = None):
         identity = identity or self.game.get_identity(self.player_id)
         self.send_state_update({
@@ -179,43 +185,43 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         })
 
     def send_game_begun(self):
-        self.write_message(json.dumps({
+        self.safe_send({
             "type": "game_begun"
-        }))
+        })
     
     def send_state_update(self, updates):
         print("sending update: " + str(updates))
-        self.write_message(json.dumps({
+        self.safe_send({
             "type": "state_update",
             "updates": updates
-        }))
+        })
     
     def send_new_prompt(self, prompt):
         print("sending prompt: " + str(prompt))
         if prompt:
-            self.write_message(json.dumps({
+            self.safe_send({
                 "type": "prompt",
                 "action": prompt.method,
                 "prompt": prompt.prompt_str,
                 "choices": prompt.choices
-            }))
+            })
 
     def send_game_id(self, game_id):
-        self.write_message(json.dumps({
+        self.safe_send({
             "type": "game_id",
             "game_id": game_id
-        }))
+        })
     
     def send_player_id(self):
-        self.write_message(json.dumps({
+        self.safe_send({
             "type": "player_id",
             "player_id": self.player_id
-        }))
+        })
 
     def send_is_host(self):
-        self.write_message(json.dumps({
+        self.safe_send({
             "type": "is_host"
-        }))
+        })
 
     def safe_get_game(self, request):
         self.ensure_properties(request, ["game_id"])
@@ -235,10 +241,10 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 raise RequestError(f"Invalid Request. Did not find expected field {prop}.")
 
     def respond_to_error(self, reason: str):
-        self.write_message(json.dumps({
+        self.safe_send({
             "type": "error",
             "msg": reason
-        }))
+        })
     
     def respond_to_success(self, msg: str, data = {}):
         response = {
@@ -246,7 +252,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             "msg": msg
         }
         response.update(data)
-        self.write_message(json.dumps(response))
+        self.safe_send(response)
 
 
 application = tornado.web.Application([
