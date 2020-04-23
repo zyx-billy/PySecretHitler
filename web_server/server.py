@@ -75,11 +75,13 @@ class GameHandle:
             raise RequestError("Cannot perform request. Unauthorized to do so.")
         (prompts, state_updates) = getattr(self.game, action)(choice)
 
-        # send state updates to everyone
-        for ws in self.handles.values():
-            ws.send_state_update(state_updates)
+        if state_updates:
+            # send state updates to everyone
+            for ws in self.handles.values():
+                ws.send_state_update(state_updates)
         
-        self.update_prompts(prompts)
+        if prompts:
+            self.update_prompts(prompts)
     
     def get_prompt_of_player(self, player_id):
         player = self.players[player_id]
