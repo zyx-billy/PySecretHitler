@@ -6,14 +6,14 @@ from secret_hitler.exceptions import GameError, UnreachableStateError, Unimpleme
 from secret_hitler.player import Player
 from secret_hitler.prompts import Prompts
 
-class InvalidCommandError(Exception):
+class InvalidCommandError(GameError):
     def __init__(self, state, command, reason):
         self.state = state
         self.command = command
         self.reason = reason
         super().__init__(f"Cannot perform command {command} at state {state}: {reason}")
 
-class CommandStateError(Exception):
+class CommandStateError(GameError):
     def __init__(self, expected_state, actual_state):
         self.expected = expected_state
         self.actual = actual_state
@@ -97,6 +97,9 @@ class Game:
                             choices=[p.name for p in self.board.players])
             else:
                 raise UnreachableStateError("Invalid presidential power: " + presidential_power)
+        elif self.state == Stage.GAME_OVER:
+            # no prompts
+            pass
         else:
             raise UnreachableStateError("Invalid state: " + self.state)
         
@@ -150,8 +153,8 @@ class Game:
         
         if res is True:
             # vote passed
-            self.board.prev_chancellor = self.board.chancellor
             self.board.chancellor = self.board.nominated_chancellor
+            self.board.register_update("chancellor")
             self.board.nominated_chancellor = None
             self.board.draw_three_tiles()
             self.shift_state(Stage.PRESIDENT_DECIDES_LEGISLATION)

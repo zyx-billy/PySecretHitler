@@ -43,6 +43,9 @@ class GameHandle:
         
         return player_id
     
+    def update_ws_handle(self, player_id: str, ws_handle):
+        self.handles[player_id] = ws_handle
+    
     def get_identity(self, player_id: str):
         return self.game.get_identity(self.players[player_id])
 
@@ -124,6 +127,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 self.game = self.safe_get_game(request)
                 self.safe_get_player(request) # makes sure player_id exists in self.game
                 self.player_id = request["player_id"]
+                self.game.update_ws_handle(self.player_id, self)
                 if self.game.has_begun:
                     # send game_begun to send client into game proper
                     self.send_game_begun()
@@ -167,10 +171,23 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 
         except RequestError as err:
             self.respond_to_error(str(err))
+            self.recover_from_execption()
         except GameError as err:
             self.respond_to_error(str(err))
+            self.recover_from_execption()
         # except Exception as err:
         #     self.respond_to_error("Unknown exception occurred: " + str(err))
+
+    def recover_from_execption(self):
+        if self.game is None:
+            return
+        # TODO: better recovery from all kinds of states
+        if self.game.has_begun:
+            # send full state to get client up to date
+            self.send_state_update(self.game.get_full_state())
+            self.send_player_identity()
+            # send current prompt if there exists one
+            self.send_new_prompt(self.game.get_prompt_of_player(self.player_id))
 
     def safe_send(self, obj):
         try:

@@ -24,7 +24,7 @@ class App extends React.Component {
         super(props);
         this.ws = null;
         this.state = {
-            ws_connected: true,
+            ws_connected: false,
             status: AppStatus.new_or_join,
             is_host: false,
             /* player state */
@@ -42,7 +42,8 @@ class App extends React.Component {
             drawn_tiles: undefined,
             liberal_progress: 0,
             fascist_progress: 0,
-            fascist_powers: undefined
+            fascist_powers: undefined,
+            winner: undefined
         }
         this.game_id = undefined;
         this.player_id = undefined;

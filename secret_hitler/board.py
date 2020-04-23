@@ -134,6 +134,7 @@ class Board:
         self.fascist_progress : int = 0
         self.fascist_powers : List[PresidentialPower] = None
         self.votes : List[bool] = [] # True for ja
+        self.winner : Tile = None
         
         # keeps track of updated properties
         self.updates = set()
@@ -150,7 +151,8 @@ class Board:
         "drawn_tiles": (lambda me,l: [str(t) for t in l]),
         "liberal_progress": None,
         "fascist_progress": None,
-        "fascist_powers": (lambda me,l: [str(p) for p in l])
+        "fascist_powers": (lambda me,l: [str(p) for p in l]),
+        "winner": (lambda me,w: str(w))
     }
     
     def register_update(self, prop):
@@ -211,7 +213,9 @@ class Board:
     
     def advance_president(self):
         self.register_update("president_idx")
+        self.register_update("chancellor")
         self.prev_president = self.get_president()
+        self.prev_chancellor = self.chancellor
         self.president_idx = (self.president_idx + 1) % len(self.players)
     
     def cast_vote(self, vote: bool):
@@ -266,8 +270,12 @@ class Board:
     
     def get_winner(self):
         if self.liberal_progress == LIBERAL_WINNING_PROGRESS:
+            self.winner = Tile.LIBERAL_POLICY
+            self.register_update("winner")
             return Tile.LIBERAL_POLICY
         if self.fascist_progress == FASCIST_WINNING_PROGRESS:
+            self.winner = Tile.FASCIST_POLICY
+            self.register_update("winner")
             return Tile.FASCIST_POLICY
         return None
 
