@@ -3,3 +3,6 @@ class GameError(Exception):
 
 class UnreachableStateError(GameError):
     pass
+
+class UnimplementedFeature(GameError):
+    pass

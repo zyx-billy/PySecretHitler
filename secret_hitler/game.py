@@ -1,8 +1,8 @@
 from enum import Enum
 from typing import List
 
-from secret_hitler.board import Board, Tile
-from secret_hitler.exceptions import GameError
+from secret_hitler.board import Board, Tile, PresidentialPower
+from secret_hitler.exceptions import GameError, UnreachableStateError, UnimplementedFeature
 from secret_hitler.player import Player
 from secret_hitler.prompts import Prompts
 
@@ -60,22 +60,50 @@ class Game:
             for player in self.board.players:
                 prompts.add(player,
                             method="vote_for_chancellor",
-                            prompt_str=f"Vote for chancellor: {self.board.nominated_chancellor}",
+                            prompt_str=f"Vote for chancellor: {self.board.nominated_chancellor.name}",
                             choices=["ja","nein"])
         elif self.state == Stage.PRESIDENT_DECIDES_LEGISLATION:
             # president discards a tile
             prompts.add(self.board.get_president(),
                         method="president_discards_tile",
                         prompt_str="Discard a policy tile",
-                        choices=map(str, self.board.drawn_tiles))
+                        choices=list(map(str, self.board.drawn_tiles)))
         elif self.state == Stage.CHANCELLOR_DECIDES_LEGISLATION:
             # chancellor discards a tile
             prompts.add(self.board.chancellor,
                         method="chancellor_discards_tile",
                         prompt_str="Discard a policy tile",
-                        choices=map(str, self.board.drawn_tiles))
+                        choices=list(map(str, self.board.drawn_tiles)))
+        elif self.state == Stage.PERFORM_PRESIDENTIAL_POWER:
+            # dependent on the presidential power
+            presidential_power = self.board.get_current_presidential_power()
+            if presidential_power is None:
+                raise UnreachableStateError("Unexpectedly entered presidentail_power stage")
+            # case on presidential power
+            if presidential_power == PresidentialPower.INVESTIGATE_LOYALTY:
+                raise UnimplementedFeature("Presidential Power: investigate loyalty")
+            elif presidential_power == PresidentialPower.CALL_SPECIAL_ELECTION:
+                raise UnimplementedFeature("Presidential Power: call special election")
+            elif presidential_power == PresidentialPower.POLICY_PEEK:
+                top_three_tiles_str = ", ".join(map(str, self.board.peek_top_three_tiles()))
+                prompts.add(self.board.get_president(),
+                            method="pp_done_policy_peek",
+                            prompt_str=f"The top three tiles are: {top_three_tiles_str}",
+                            choices=["Got it!"])
+            elif presidential_power == PresidentialPower.EXECUTION:
+                prompts.add(self.board.get_president(),
+                            method="pp_execute_player",
+                            prompt_str=f"Execute one a player",
+                            choices=[p.name for p in self.board.players])
+            else:
+                raise UnreachableStateError("Invalid presidential power: " + presidential_power)
+        else:
+            raise UnreachableStateError("Invalid state: " + self.state)
         
         return (prompts.get_dict(), self.board.extract_updates())
+    
+    def gen_empty_response(self):
+        return (None, None)
 
     def get_full_state(self):
         self.requires_game_started()
@@ -99,27 +127,28 @@ class Game:
 
     def nominate_chancellor(self, nominee: str):
         self.requires_state(Stage.NEW_PRESIDENT)
-        if nominee == self.board.get_president():
+        if nominee == self.board.get_president().name:
             raise InvalidCommandError(self.state, "nominate_chancellor",
                                       "Chancellor cannot be the same as current president")
-        if nominee == self.board.prev_chancellor:
+        if self.board.prev_chancellor and nominee == self.board.prev_chancellor.name:
             raise InvalidCommandError(self.state, "nominate_chancellor",
                                       "Chancellor cannot be the same as previous chancellor")
-        if nominee == self.board.prev_president and len(self.board.players) > 5:
+        if self.board.prev_president and nominee == self.board.prev_president.name and len(self.board.players) > 5:
             raise InvalidCommandError(self.state, "nominate_chancellor",
                                       "Chancellor cannot be the same as previous president")
         self.board.nominated_chancellor = self.board.get_player(nominee)
         self.shift_state(Stage.CHANCELLOR_NOMINATED)
         return self.gen_response()
     
-    def vote_for_chancellor(self, votes: List[str]):
+    def vote_for_chancellor(self, vote: str):
         self.requires_state(Stage.CHANCELLOR_NOMINATED)
-        if len(votes) != len(self.board.players):
-            raise InvalidCommandError(self.state, "vote_for_chancellor",
-                                      f"Number of votes ({len(votes)}) does not equal number of active players "
-                                      f"({len(self.board.players)})")
+        res = self.board.cast_vote(vote == "ja")
         
-        if votes.count("ja") > (len(self.board.players) // 2):
+        if res is None:
+            # not yet done voting (more votes needed)
+            return self.gen_empty_response()
+        
+        if res is True:
             # vote passed
             self.board.prev_chancellor = self.board.chancellor
             self.board.chancellor = self.board.nominated_chancellor
@@ -131,28 +160,43 @@ class Game:
         # vote failed
         self.board.nominated_chancellor = None
         self.shift_state(Stage.NEW_PRESIDENT)
+        # TODO: implement election tracker
         return self.gen_response()
 
     def president_discards_tile(self, tile: Tile):
         self.requires_state(Stage.PRESIDENT_DECIDES_LEGISLATION)
-        self.board.discard_tile(tile)
+        self.board.discard_tile(Tile.from_str(tile))
         self.shift_state(Stage.CHANCELLOR_DECIDES_LEGISLATION)
         return self.gen_response()
 
     def chancellor_discards_tile(self, tile: Tile):
         self.requires_state(Stage.CHANCELLOR_DECIDES_LEGISLATION)
-        self.board.discard_tile(tile)
+        self.board.discard_tile(Tile.from_str(tile))
         # check game status
         self.winner = self.board.get_winner()
         if self.winner:
             self.shift_state(Stage.GAME_OVER)
             return self.gen_response()
         
-        if self.board.get_current_presidential_power:
+        if self.board.get_current_presidential_power():
             self.shift_state(Stage.PERFORM_PRESIDENTIAL_POWER)
             return self.gen_response()
         
         # no winner and no presidential power, shift president
+        self.board.advance_president()
+        self.shift_state(Stage.NEW_PRESIDENT)
+        return self.gen_response()
+    
+    # presidential power related
+    def pp_done_policy_peek(self, ack):
+        self.requires_state(Stage.PERFORM_PRESIDENTIAL_POWER)
+        self.board.advance_president()
+        self.shift_state(Stage.NEW_PRESIDENT)
+        return self.gen_response()
+
+    def pp_execute_player(self, player: str):
+        self.requires_state(Stage.PERFORM_PRESIDENTIAL_POWER)
+        self.board.execute_player(player)
         self.board.advance_president()
         self.shift_state(Stage.NEW_PRESIDENT)
         return self.gen_response()

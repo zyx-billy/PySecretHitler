@@ -36,6 +36,14 @@ class Tile(Enum):
             return "Fascist"
         raise UnreachableStateError("Invalid Tile Enum value")
 
+    @staticmethod
+    def from_str(s: str):
+        if s == "Liberal":
+            return Tile.LIBERAL_POLICY
+        elif s == "Fascist":
+            return Tile.FASCIST_POLICY
+        raise GameError("Cannot convert to tile from string: " + s)
+
 class PresidentialPower(Enum):
     INVESTIGATE_LOYALTY = 0
     CALL_SPECIAL_ELECTION = 1
@@ -124,7 +132,8 @@ class Board:
         self.latest_policy : Tile = None
         self.liberal_progress : int = 0
         self.fascist_progress : int = 0
-        self.fascist_powers: List[PresidentialPower] = None
+        self.fascist_powers : List[PresidentialPower] = None
+        self.votes : List[bool] = [] # True for ja
         
         # keeps track of updated properties
         self.updates = set()
@@ -203,16 +212,30 @@ class Board:
     def advance_president(self):
         self.register_update("president_idx")
         self.prev_president = self.get_president()
-        self.president_idx = (president_idx + 1) % len(self.players)
+        self.president_idx = (self.president_idx + 1) % len(self.players)
+    
+    def cast_vote(self, vote: bool):
+        self.votes.append(vote)
+
+        if len(self.votes) == len(self.players):
+            # voting finished
+            passed = self.votes.count(True) > (len(self.players) // 2)
+            self.votes = []
+            return passed
+        
+        return None
+
+    def recycle_used_tiles(self):
+        # shuffle discarded tiles and put under unused tiles
+        random.shuffle(self.discarded_tiles)
+        self.unused_tiles += self.discarded_tiles
+        self.discarded_tiles = []
+        self.register_update("unused_tiles")
+        self.register_update("discarded_tiles")
 
     def draw_three_tiles(self):
         if len(self.unused_tiles) < 3:
-            # shuffle discarded tiles and put under unused tiles
-            random.shuffle(self.discarded_tiles)
-            self.unused_tiles += self.discarded_tiles
-            self.discarded_tiles = []
-            self.register_update("unused_tiles")
-            self.register_update("discarded_tiles")
+            self.recycle_used_tiles()
         
         self.drawn_tiles = self.unused_tiles[:3]
         self.unused_tiles = self.unused_tiles[3:]
@@ -230,10 +253,13 @@ class Board:
         if len(self.drawn_tiles) == 1:
             # enact policy
             self.latest_policy = self.drawn_tiles[0]
+            print("enacting policy: " + str(self.latest_policy))
             if self.latest_policy == Tile.LIBERAL_POLICY:
                 self.liberal_progress += 1
+                self.register_update("liberal_progress")
             if self.latest_policy == Tile.FASCIST_POLICY:
                 self.fascist_progress += 1
+                self.register_update("fascist_progress")
             # destroy enacted tile (do not put back into any tile list)
             self.drawn_tiles = []
             self.register_update("drawn_tiles")
@@ -251,3 +277,24 @@ class Board:
         if self.fascist_progress == 0:
             return None
         return self.fascist_powers[self.fascist_progress - 1]
+
+    def peek_top_three_tiles(self):
+        if len(self.unused_tiles) < 3:
+            self.recycle_used_tiles()
+        
+        return self.unused_tiles[:3]
+    
+    def execute_player(self, player_name: str):
+        unlucky_person = None
+        for player in self.players:
+            if player.name == player_name:
+                unlucky_person = player
+                break
+        
+        if unlucky_person is None:
+            raise UnreachableStateError("Cannot execute non-live player: " + player_name)
+
+        self.players.remove(unlucky_person)
+        self.eliminated_players.append(unlucky_person)
+        self.register_update("players")
+        self.register_update("eliminated_players")

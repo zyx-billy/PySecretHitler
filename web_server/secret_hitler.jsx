@@ -238,7 +238,9 @@ class App extends React.Component {
                 <TileDeck name="Discarded Tiles" size={this.state.discarded_tiles} />
                 <PlayerContainer
                     live_players={this.state.players}
-                    dead_players={this.state.eliminated_players} />
+                    dead_players={this.state.eliminated_players}
+                    president={this.state.president}
+                    chancellor={this.state.chancellor} />
                 {!this.state.prompt ? "" :
                     <UserChoiceSelector
                         key={this.state.prompt_key}
@@ -440,18 +442,14 @@ class PlayerInfo extends React.Component {
 class PlayerContainer extends React.Component {
     constructor(props) { // live_players, dead_players
         super(props);
-        this.state = {
-            president: 0,
-            chancellor: -1
-        };
     }
 
     render() {
-        const alives = this.props.live_players.map((name, idx) => {
+        const alives = this.props.live_players.map((name) => {
             var position = PositionEnum.none;
-            if (idx == this.state.president)
+            if (name == this.props.president)
                 position = PositionEnum.president;
-            else if (idx == this.state.chancellor)
+            else if (name == this.props.chancellor)
                 position = PositionEnum.chancellor;
             return <PlayerInfo name={name} position={position} alive={true} key={name} />
         });
