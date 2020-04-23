@@ -163,13 +163,13 @@ class Game:
         # TODO: implement election tracker
         return self.gen_response()
 
-    def president_discards_tile(self, tile: Tile):
+    def president_discards_tile(self, tile: str):
         self.requires_state(Stage.PRESIDENT_DECIDES_LEGISLATION)
         self.board.discard_tile(Tile.from_str(tile))
         self.shift_state(Stage.CHANCELLOR_DECIDES_LEGISLATION)
         return self.gen_response()
 
-    def chancellor_discards_tile(self, tile: Tile):
+    def chancellor_discards_tile(self, tile: str):
         self.requires_state(Stage.CHANCELLOR_DECIDES_LEGISLATION)
         self.board.discard_tile(Tile.from_str(tile))
         # check game status

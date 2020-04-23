@@ -1,6 +1,6 @@
 import json
 import os
-from typing import List
+from typing import Dict, List
 import uuid
 
 import tornado.httpserver
@@ -11,7 +11,7 @@ import tornado.web
 from secret_hitler.game import Game
 from secret_hitler.exceptions import GameError
 
-games = dict()
+games = dict()   # game_id -> GameHandle
 
 MAX_GAMES_ALLOWED = 1
 
@@ -20,13 +20,13 @@ class RequestError(Exception):
 
 class GameHandle:
     def __init__(self, host: str):
-        self.host = host        # player_name of host
-        self.game = Game()
-        self.players = dict()   # player_id -> player_name
-        self.handles = dict()   # player_id -> ws_handle
-        self.ids = dict()       # player_name -> player_id
-        self.prompts = dict()   # player_name -> secret_hitler.Prompt
-        self.has_begun = False
+        self.host: str = host                                    # player_name of host
+        self.game: secret_hitler.Game = Game()                   # game server instance
+        self.players: Dict[str, str] = dict()                    # player_id -> player_name
+        self.handles: Dict[str, WSHandler] = dict()              # player_id -> ws_handle
+        self.ids: Dict[str, str] = dict()                        # player_name -> player_id
+        self.prompts: Dict[str, secret_hitler.Prompt] = dict()   # player_name -> secret_hitler.Prompt
+        self.has_begun: bool = False                             # has the game begun?
 
     def add_player(self, player: str, ws_handle):
         self.game.add_player(player)
