@@ -477,7 +477,7 @@ class UserChoiceItem extends React.Component {
     }
 
     on_self_selected() {
-        this.props.on_select(this.props.choice)
+        this.props.on_select(this.props.choice, this.props.unique_key)
     }
 
     render() {
@@ -499,13 +499,15 @@ class UserChoiceSelector extends React.Component {
         this.on_submit = this.on_submit.bind(this);
         this.state = {
             selected: undefined,
+            selected_key: undefined,
             submission: undefined
         };
     }
 
-    on_child_selected(key) {
+    on_child_selected(choice, key) {
         this.setState({
-            selected: key
+            selected: choice,
+            selected_key: key
         });
     }
 
@@ -517,13 +519,17 @@ class UserChoiceSelector extends React.Component {
     }
 
     render() {
-        const selections = this.props.choices.map((choice) =>
-            <UserChoiceItem
-                key={choice}
-                choice={choice}
-                is_selected={choice === this.state.selected}
-                on_select={this.on_child_selected} />
-        );
+        const selections = this.props.choices.map((choice, idx) => {
+            const key = choice.concat(idx.toString());
+            return (
+                <UserChoiceItem
+                    key={key}
+                    choice={choice}
+                    unique_key={key} // because 'key' is not accessible in child
+                    is_selected={key === this.state.selected_key}
+                    on_select={this.on_child_selected} />
+            );
+        });
         
         return (
             <div className="user-choice-selector">
