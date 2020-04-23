@@ -3,7 +3,7 @@ from typing import List
 
 from secret_hitler.board import Board, Tile, PresidentialPower
 from secret_hitler.exceptions import GameError, UnreachableStateError, UnimplementedFeature
-from secret_hitler.player import Player
+from secret_hitler.player import Player, Identity
 from secret_hitler.prompts import Prompts
 
 class InvalidCommandError(GameError):
@@ -21,18 +21,20 @@ class CommandStateError(GameError):
 
 class Stage(Enum):
     NEW_GAME = 0
-    NEW_PRESIDENT = 1
-    CHANCELLOR_NOMINATED = 2
-    PRESIDENT_DECIDES_LEGISLATION = 3
-    CHANCELLOR_DECIDES_LEGISLATION = 4
-    PERFORM_PRESIDENTIAL_POWER = 5
-    GAME_OVER = 6
+    REVEAL_IDENTITIES = 1
+    NEW_PRESIDENT = 2
+    CHANCELLOR_NOMINATED = 3
+    PRESIDENT_DECIDES_LEGISLATION = 4
+    CHANCELLOR_DECIDES_LEGISLATION = 5
+    PERFORM_PRESIDENTIAL_POWER = 6
+    GAME_OVER = 7
 
 class Game:
     def __init__(self):
         self.board : Board = Board()
         self.state : Stage = Stage.NEW_GAME
         self.winner : Tile = None
+        self.identity_acks : int = 0
 
     def requires_state(self, state: Stage):
         if self.state != state:
@@ -49,6 +51,29 @@ class Game:
         prompts = Prompts()
         if self.state == Stage.NEW_GAME:
             pass
+        elif self.state == Stage.REVEAL_IDENTITIES:
+            # gather team info
+            fascist_player_names = []
+            hitler_name = ""
+            for player in self.board.players:
+                if player.identity == Identity.FASCIST:
+                    fascist_player_names.append(player.name)
+                elif player.identity == Identity.HITLER:
+                    hitler_name = player.name
+            # announce identites and teammates
+            for player in self.board.players:
+                teammate_info = ""
+                if player.identity == Identity.FASCIST:
+                    teammate_info += f" Hitler is: {hitler_name}."
+                    if len(fascist_player_names) > 1:
+                        fascists_name_list = ", ".join(fascist_player_names)
+                        teammate_info += f" Your team: {fascists_name_list}"
+                elif player.identity == Identity.HITLER and len(fascist_player_names) == 1:
+                    teammate_info += f" Your teammate is: {fascist_player_names[0]}"
+                prompts.add(player,
+                            method="ack_identity",
+                            prompt_str=f"You are: {str(player.identity)}." + teammate_info,
+                            choices=["Got it!"])
         elif self.state == Stage.NEW_PRESIDENT:
             # president nominate chancellor
             prompts.add(self.board.get_president(),
@@ -125,8 +150,16 @@ class Game:
     def begin_game(self):
         self.requires_state(Stage.NEW_GAME)
         self.board.begin_game()
-        self.shift_state(Stage.NEW_PRESIDENT)
+        self.shift_state(Stage.REVEAL_IDENTITIES)
         return self.gen_response()
+
+    def ack_identity(self, ack):
+        self.requires_state(Stage.REVEAL_IDENTITIES)
+        self.identity_acks += 1
+        if self.identity_acks == len(self.board.players):
+            self.shift_state(Stage.NEW_PRESIDENT)
+            return self.gen_response()
+        return self.gen_empty_response()
 
     def nominate_chancellor(self, nominee: str):
         self.requires_state(Stage.NEW_PRESIDENT)
