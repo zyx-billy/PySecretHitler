@@ -232,7 +232,6 @@ class Game:
 
     def pp_execute_player(self, player: str):
         self.requires_state(Stage.PERFORM_PRESIDENTIAL_POWER)
-        self.board.execute_player(player)
-        self.board.advance_president()
+        self.board.execute_player_and_advance_president(player)
         self.shift_state(Stage.NEW_PRESIDENT)
         return self.gen_response()

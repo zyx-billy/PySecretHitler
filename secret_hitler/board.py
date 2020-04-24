@@ -292,17 +292,36 @@ class Board:
         
         return self.unused_tiles[:3]
     
-    def execute_player(self, player_name: str):
+    # have to be done at the same time due to weird president_idx logic
+    def execute_player_and_advance_president(self, player_name: str):
         unlucky_person = None
+        unlucky_idx = 0
         for player in self.players:
             if player.name == player_name:
                 unlucky_person = player
                 break
+            unlucky_idx += 1
         
         if unlucky_person is None:
             raise UnreachableStateError("Cannot execute non-live player: " + player_name)
-
+        
+        # save prev president and chancellor
+        self.register_update("president_idx")
+        self.register_update("chancellor")
+        self.prev_president = self.get_president()
+        self.prev_chancellor = self.chancellor
+        
+        # find out next president_idx
+        if self.president_idx < unlucky_idx:
+            next_president_idx = self.president_idx + 1
+        else:
+            next_president_idx = self.president_idx % (len(self.players) - 1)
+        
+        # actually eliminate the unlucky person
         self.players.remove(unlucky_person)
         self.eliminated_players.append(unlucky_person)
         self.register_update("players")
         self.register_update("eliminated_players")
+
+        # advance president
+        self.president_idx = next_president_idx
