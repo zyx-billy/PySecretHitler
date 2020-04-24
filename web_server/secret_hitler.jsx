@@ -27,6 +27,7 @@ class App extends React.Component {
             ws_connected: false,
             status: AppStatus.new_or_join,
             is_host: false,
+            event_items: [],
             /* player state */
             identity: undefined,
             prompt: undefined,
@@ -134,11 +135,19 @@ class App extends React.Component {
             this.setState(data.updates);
         } else if (data.type === "error") {
             console.log("[Server Error]: " + data.msg);
+            this.append_event_msg(data.msg, true);
         } else if (data.type === "success") {
             console.log("[Success]: " + data.msg);
+            this.append_event_msg(data.msg, false);
         } else {
             console.log("Unrecognized response type: " + data.type);
         }
+    }
+
+    append_event_msg(msg, is_error) {
+        this.setState((state, props) => ({
+            event_items: state.event_items.concat({msg: msg, is_error: is_error})
+        }));
     }
 
     update_game_id(game_id) {
@@ -192,10 +201,17 @@ class App extends React.Component {
             return (
                 <div className="pre-game">
                     <h1>Welcome to Secret Hitler<span className={connection_indicator_class}></span></h1>
-                    <p>Please create a new game or join an existing game:</p>
-                    <NewOrJoinForms
-                        on_new_game_submit={this.on_new_game_submit}
-                        on_join_game_submit={this.on_join_game_submit} />
+                    <div className="game-main">
+                        <div className="left-panel">
+                            <p>Please create a new game or join an existing game:</p>
+                            <NewOrJoinForms
+                                on_new_game_submit={this.on_new_game_submit}
+                                on_join_game_submit={this.on_join_game_submit} />
+                        </div>
+                        <div className="sidebar">
+                            <EventList items={this.state.event_items} />
+                        </div>
+                    </div>
                 </div>
             );
         }
@@ -227,28 +243,35 @@ class App extends React.Component {
         return (
             <div className="game">
                 <h1>Secret Hitler<span className={connection_indicator_class}></span></h1>
-                <ProgressBoard
-                    name="Liberal"
-                    powers={["","","","",""]}
-                    progress={this.state.liberal_progress} />
-                <ProgressBoard
-                    name="Fascist"
-                    powers={this.state.fascist_powers}
-                    progress={this.state.fascist_progress} />
-                <TileDeck name="Unused Tiles" size={this.state.unused_tiles} />
-                <TileDeck name="Discarded Tiles" size={this.state.discarded_tiles} />
-                <PlayerContainer
-                    live_players={this.state.players}
-                    dead_players={this.state.eliminated_players}
-                    president={this.state.president}
-                    chancellor={this.state.chancellor} />
-                {!this.state.prompt ? "" :
-                    <UserChoiceSelector
-                        key={this.state.prompt_key}
-                        on_user_choice={this.on_user_choice}
-                        prompt={this.state.prompt.prompt}
-                        choices={this.state.prompt.choices} />
-                }
+                <div className="game-main">
+                    <div>
+                        <ProgressBoard
+                            name="Liberal"
+                            powers={["","","","",""]}
+                            progress={this.state.liberal_progress} />
+                        <ProgressBoard
+                            name="Fascist"
+                            powers={this.state.fascist_powers}
+                            progress={this.state.fascist_progress} />
+                        <TileDeck name="Unused Tiles" size={this.state.unused_tiles} />
+                        <TileDeck name="Discarded Tiles" size={this.state.discarded_tiles} />
+                        <PlayerContainer
+                            live_players={this.state.players}
+                            dead_players={this.state.eliminated_players}
+                            president={this.state.president}
+                            chancellor={this.state.chancellor} />
+                        {!this.state.prompt ? "" :
+                            <UserChoiceSelector
+                                key={this.state.prompt_key}
+                                on_user_choice={this.on_user_choice}
+                                prompt={this.state.prompt.prompt}
+                                choices={this.state.prompt.choices} />
+                        }
+                    </div>
+                    <div className="sidebar">
+                        <EventList items={this.state.event_items} />
+                    </div>
+                </div>
             </div>
         );
     }
@@ -543,6 +566,48 @@ class UserChoiceSelector extends React.Component {
                     disabled={this.state.selected === undefined || this.state.submission !== undefined}>
                         Submit
                 </button>
+            </div>
+        );
+    }
+}
+
+class EventItem extends React.Component {
+    constructor(props) { // event
+        super(props);
+    }
+
+    render() {
+        let classes = "event-item";
+        if (this.props.event.is_error)
+            classes += " is-error"
+        return (
+            <div className={classes}>
+                {this.props.event.msg}
+            </div>
+        );
+    }
+}
+
+class EventList extends React.Component {
+    constructor(props) { // items
+        super(props);
+    }
+
+    componentDidUpdate(prevProps) {
+        // scroll to last element
+        const event_list = document.getElementsByClassName("event-list");
+        if (event_list.length > 0)
+            event_list[0].scrollTop = event_list[0].scrollHeight;
+    }
+
+    render() {
+        const items = this.props.items.map((event, idx) => (
+            <EventItem event={event} key={idx} />
+        ));
+        return (
+            <div className="event-list">
+                <p>Events:</p>
+                {items}
             </div>
         );
     }
