@@ -281,11 +281,11 @@ class NewOrJoinForms extends React.Component {
         if (target_name === "new-form") {
             this.setState({submitted: true});
             console.log("Creating a new game by: " + this.state.new_game_host);
-            this.props.on_new_game_submit(this.state.new_game_host);
+            this.props.on_new_game_submit(this.state.new_game_host.trim());
         } else if (target_name == "join-form") {
             this.setState({submitted: true});
             console.log("Joining game: " + this.state.join_game_id + ", for player: " + this.state.player_name);
-            this.props.on_join_game_submit(this.state.join_game_id, this.state.player_name);
+            this.props.on_join_game_submit(this.state.join_game_id.trim(), this.state.player_name.trim());
         }
         event.preventDefault();
     }
