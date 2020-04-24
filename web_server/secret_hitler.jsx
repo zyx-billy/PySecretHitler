@@ -17,6 +17,15 @@ function get_cookie(key) {
     return null;
 }
 
+function get_ws_url() {
+    const ws_protocol = window.location.protocol == "https:" ? "wss://" : "ws://";
+    let curr_path = window.location.pathname;
+    if (curr_path.slice(-1) != "/") {
+        curr_path = curr_path + "/";
+    }
+    return ws_protocol + window.location.host + curr_path + "ws";
+}
+
 const AppStatus = Object.freeze({"new_or_join":"new_or_join", "awaiting_begin":"awaiting_begin", "begun":"begun"})
 
 class App extends React.Component {
@@ -64,7 +73,7 @@ class App extends React.Component {
     connect() {
         if (ws && ws.readyState !== WebSocket.CLOSED) return;
 
-        var ws = new WebSocket("ws://" + location.host + "/ws");
+        var ws = new WebSocket(get_ws_url());
         const timeout = 250;
         var connectInterval;
         
