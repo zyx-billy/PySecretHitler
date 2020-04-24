@@ -152,7 +152,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 self.game = self.safe_get_game(request)
                 self.ensure_properties(request, ["player_name"])
                 if request["player_name"] in self.game.players.values():
-                    respond_to_error("Cannot join. User name already exists in game.")
+                    self.respond_to_error("Cannot join. User name already exists in game.")
                 self.player_id = self.game.add_player(request["player_name"], self)
                 self.respond_to_success(f"Joined game. Currently {len(self.game.players)} players in game.")
                 self.send_game_id(request["game_id"])
