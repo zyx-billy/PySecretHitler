@@ -195,6 +195,7 @@ class Game:
         
         # vote failed
         self.board.nominated_chancellor = None
+        self.board.advance_president()
         self.shift_state(Stage.NEW_PRESIDENT)
         # TODO: implement election tracker
         return self.gen_response()
