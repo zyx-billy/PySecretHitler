@@ -11,7 +11,7 @@ import tornado.web
 from secret_hitler.game import Game
 from secret_hitler.exceptions import GameError
 
-games = dict()   # game_id -> GameHandle
+games: Dict[str, "GameHandle"] = dict()
 
 MAX_GAMES_ALLOWED = 1
 
@@ -76,7 +76,7 @@ class GameHandle:
         # check if user is authorized
         if self.players[player_id] not in self.prompts:
             raise RequestError("Cannot perform request. Unauthorized to do so.")
-        (prompts, state_updates) = getattr(self.game, action)(choice)
+        (prompts, state_updates) = self.game.perform_action(action, choice)
 
         if prompts:
             self.update_prompts(prompts)
