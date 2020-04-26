@@ -139,7 +139,7 @@ class Board:
         self.latest_policy : Tile = None
         self.liberal_progress : int = 0
         self.fascist_progress : int = 0
-        self.fascist_powers : List[PresidentialPower] = None
+        self.fascist_powers : List[PresidentialPower] = []
         self.votes : List[bool] = [] # True for ja
         self.winner : Tile = None
         
