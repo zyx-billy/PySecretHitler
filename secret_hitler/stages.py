@@ -1,12 +1,15 @@
-# secret_hitler.stages
-#
-# Describes the various stages of the game and the user actions that can be performed at each stage.
+"""secret_hitler.stages
+
+Describes the various stages of the game and the user actions that can be performed at each stage.
+"""
+
 from typing import List
 
 from secret_hitler.board import Board, Tile, Faction, Vote, PresidentialPower
 from secret_hitler.exceptions import GameError, UnreachableStateError, UnimplementedFeature
 from secret_hitler.player import Player, Identity
 from secret_hitler.prompts import Prompts
+
 
 class IllegalActionError(GameError):
     def __init__(self, stage: "Stage", action_name: str, reason: str):
@@ -20,7 +23,7 @@ class Stage:
     def __init__(self, board):
         self.board = board
 
-    def perform_action(self, action: str, choice: str):
+    def perform_action(self, action: str, choice: str) -> "Stage":
         if not hasattr(self, action):
             raise IllegalActionError(self, action, "Action does not exist")
         self._current_action = getattr(self, action)
@@ -28,7 +31,7 @@ class Stage:
 
     def signal_illegal_action(self, reason: str):
         raise IllegalActionError(self, self._current_action.__name__ if self._current_action else "", reason)
-    
+
     def prompts(self) -> Prompts:
         return Prompts()
 
@@ -85,7 +88,7 @@ class NewPresident(Stage):
                     prompt_str="Nominate your chancellor",
                     choices=[p.name for p in self.board.players])
         return prompts
-    
+
     def nominate_chancellor(self, nominee: str) -> Stage:
         if nominee == self.board.get_president().name:
             self.signal_illegal_action("Chancellor cannot be the same as current president")
@@ -110,7 +113,7 @@ class ChancellorNominated(Stage):
             prompts.add(player,
                         method="vote_for_chancellor",
                         prompt_str=f"Vote for chancellor: {self.nominee.name}",
-                        choices=["ja","nein"])
+                        choices=["ja", "nein"])
         return prompts
 
     def vote_for_chancellor(self, vote: str) -> Stage:
@@ -119,7 +122,7 @@ class ChancellorNominated(Stage):
         if len(self.votes) < len(self.board.players):
             # NOT done voting
             return self
-        
+
         # done voting
         if self.votes.count(Vote.JA) > (len(self.board.players) // 2):
             # vote passed
@@ -144,7 +147,7 @@ class PresidentDecidesLegislation(Stage):
                     prompt_str="Discard a policy tile",
                     choices=[t.value for t in self.drawn_tiles])
         return prompts
-    
+
     def president_discards_tile(self, tile: str) -> Stage:
         self.board.discard_tile(self.drawn_tiles, Tile(tile))
         return ChancellorDecidesLegislation(self.board, self.drawn_tiles)
@@ -159,11 +162,11 @@ class ChancellorDecidesLegislation(Stage):
         prompts = Prompts()
         # chancellor discards a tile
         prompts.add(self.board.chancellor,
-                        method="chancellor_discards_tile",
-                        prompt_str="Discard a policy tile",
-                        choices=[t.value for t in self.remaining_tiles])
+                    method="chancellor_discards_tile",
+                    prompt_str="Discard a policy tile",
+                    choices=[t.value for t in self.remaining_tiles])
         return prompts
-    
+
     def chancellor_discards_tile(self, tile: str) -> Stage:
         self.board.discard_tile(self.remaining_tiles, Tile(tile))
         # enact tile
@@ -174,7 +177,7 @@ class ChancellorDecidesLegislation(Stage):
         winner = self.board.get_winner()
         if winner is not None:
             return GameOver(self.board, winner)
-        
+
         # check if exists presidential power if policy is a fascist policy
         if selected_policy == Tile.FASCIST_POLICY:
             pp = self.board.get_latest_presidential_power()
@@ -189,7 +192,7 @@ class PerformPresidentialPower(Stage):
     def __init__(self, board: Board, power: PresidentialPower):
         super().__init__(board)
         self.power: PresidentialPower = power
-    
+
     def prompts(self) -> Prompts:
         prompts = Prompts()
         # dependent on the presidential power
@@ -214,13 +217,13 @@ class PerformPresidentialPower(Stage):
         else:
             raise UnreachableStateError("Invalid presidential power: " + str(self.power))
         return prompts
-    
+
     def power_to_action(self, power: PresidentialPower):
         if power == PresidentialPower.POLICY_PEEK:
             return self.done_policy_peek
         elif power == PresidentialPower.EXECUTION:
             return self.execute_player
-        
+
     def done_policy_peek(self, ack: str) -> Stage:
         return NewPresident(self.board)
 

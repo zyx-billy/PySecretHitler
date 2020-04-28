@@ -1,11 +1,16 @@
+"""secret_hitler.player
+
+A Player object encapsulates information related to the a game player.
+"""
+
 from enum import Enum
 
-from secret_hitler.exceptions import UnreachableStateError
 
 class Identity(Enum):
     LIBERAL = "Liberal"
     FASCIST = "Fascist"
     HITLER = "Hitler"
+
 
 class Player:
     def __init__(self, name):

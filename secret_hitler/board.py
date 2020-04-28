@@ -1,7 +1,8 @@
-# secret_hitler.board
-#
-# Maintains game state and provides common methods for manipulating the game state.
-# Also keeps track of changes to the game state for partially updating game clients.
+"""secret_hitler.board
+
+Maintains game state and provides common methods for manipulating the game state.
+Also keeps track of changes to the game state for partially updating game clients.
+"""
 
 from enum import Enum
 import random
@@ -9,6 +10,7 @@ from typing import Dict, List, Optional, Tuple
 
 from secret_hitler.exceptions import GameError, UnreachableStateError
 from secret_hitler.player import Player, Identity
+
 
 class DuplicatePlayerNameError(GameError):
     def __init__(self, dup_name):
@@ -34,6 +36,8 @@ class InvalidNumPlayersError(GameError):
         super().__init__(f"Invalid number of players {num_players}. Min: 5, Max 10.")
 
 # Board elements
+
+
 class Vote(Enum):
     JA = "ja"
     NEIN = "nein"
@@ -74,104 +78,107 @@ class PresidentialPower(Enum):
             return "The President must kill a player"
         raise UnreachableStateError("Invalid PresidentialPower Enum value")
 
+
 # Board configs
 # num_players -> num_liberals, num_fascists, presidential_powers
 NUM_PLAYERS_TO_BOARD_CONFIG: Dict[int, Tuple[int, int, List[Optional[PresidentialPower]]]] = {
-    2: (1,0,
+    2: (1, 0,
         [None,
          None,
          PresidentialPower.POLICY_PEEK,
          PresidentialPower.EXECUTION,
          PresidentialPower.EXECUTION,
          None]),
-    4: (2,1,
+    4: (2, 1,
         [None,
          None,
          PresidentialPower.POLICY_PEEK,
          PresidentialPower.EXECUTION,
          PresidentialPower.EXECUTION,
          None]),
-    5: (3,1,
+    5: (3, 1,
         [None,
          None,
          PresidentialPower.POLICY_PEEK,
          PresidentialPower.EXECUTION,
          PresidentialPower.EXECUTION,
          None]),
-    6: (4,1,
+    6: (4, 1,
         [None,
          None,
          PresidentialPower.POLICY_PEEK,
          PresidentialPower.EXECUTION,
          PresidentialPower.EXECUTION,
          None]),
-    7: (4,2,
+    7: (4, 2,
         [None,
          PresidentialPower.INVESTIGATE_LOYALTY,
          PresidentialPower.CALL_SPECIAL_ELECTION,
          PresidentialPower.EXECUTION,
          PresidentialPower.EXECUTION,
          None]),
-    8: (5,2,
+    8: (5, 2,
         [None,
          PresidentialPower.INVESTIGATE_LOYALTY,
          PresidentialPower.CALL_SPECIAL_ELECTION,
          PresidentialPower.EXECUTION,
          PresidentialPower.EXECUTION,
          None]),
-    9: (5,3,
+    9: (5, 3,
         [PresidentialPower.INVESTIGATE_LOYALTY,
          PresidentialPower.INVESTIGATE_LOYALTY,
          PresidentialPower.CALL_SPECIAL_ELECTION,
          PresidentialPower.EXECUTION,
          PresidentialPower.EXECUTION,
          None]),
-    10: (6,3,
-        [PresidentialPower.INVESTIGATE_LOYALTY,
-         PresidentialPower.INVESTIGATE_LOYALTY,
-         PresidentialPower.CALL_SPECIAL_ELECTION,
-         PresidentialPower.EXECUTION,
-         PresidentialPower.EXECUTION,
-         None])
+    10: (6, 3,
+         [PresidentialPower.INVESTIGATE_LOYALTY,
+          PresidentialPower.INVESTIGATE_LOYALTY,
+          PresidentialPower.CALL_SPECIAL_ELECTION,
+          PresidentialPower.EXECUTION,
+          PresidentialPower.EXECUTION,
+          None])
 }
 
 LIBERAL_WINNING_PROGRESS = 5
 FASCIST_WINNING_PROGRESS = 6
 
 # Main board class
+
+
 class Board:
     def __init__(self):
-        self.players : List[Player] = []  # active players only
-        self.eliminated_players : List[Player] = []
-        self.president_idx : int = 0
-        self.chancellor : Player = None
-        self.prev_president : Player = None
-        self.prev_chancellor : Player = None
-        self.nominated_chancellor : Player = None
-        self.unused_tiles : List[Tile] = [Tile.LIBERAL_POLICY] * 6 + [Tile.FASCIST_POLICY] * 11
-        self.discarded_tiles : List[Tile] = []
-        self.liberal_progress : int = 0
-        self.fascist_progress : int = 0
-        self.fascist_powers : List[Optional[PresidentialPower]] = []
+        self.players: List[Player] = []  # active players only
+        self.eliminated_players: List[Player] = []
+        self.president_idx: int = 0
+        self.chancellor: Player = None
+        self.prev_president: Player = None
+        self.prev_chancellor: Player = None
+        self.nominated_chancellor: Player = None
+        self.unused_tiles: List[Tile] = [Tile.LIBERAL_POLICY] * 6 + [Tile.FASCIST_POLICY] * 11
+        self.discarded_tiles: List[Tile] = []
+        self.liberal_progress: int = 0
+        self.fascist_progress: int = 0
+        self.fascist_powers: List[Optional[PresidentialPower]] = []
 
         # keeps track of updated properties
         self.updates = set()
 
         random.shuffle(self.unused_tiles)
-    
+
     # State update tracking
     private_state_translations = {
-        "players": (lambda me,l: [p.name for p in l]),
-        "eliminated_players": (lambda me,l: [p.name for p in l]),
-        "president_idx": ("president", (lambda me,id: me.players[id].name)),
-        "chancellor": (lambda me,c: c and c.name),
-        "unused_tiles": (lambda me,l: len(l)),
-        "discarded_tiles": (lambda me,l: len(l)),
+        "players": (lambda me, l: [p.name for p in l]),
+        "eliminated_players": (lambda me, l: [p.name for p in l]),
+        "president_idx": ("president", (lambda me, id: me.players[id].name)),
+        "chancellor": (lambda me, c: c and c.name),
+        "unused_tiles": (lambda me, l: len(l)),
+        "discarded_tiles": (lambda me, l: len(l)),
         "liberal_progress": None,
         "fascist_progress": None,
-        "fascist_powers": (lambda me,l: [p.description() if p else "" for p in l]),
+        "fascist_powers": (lambda me, l: [p.description() if p else "" for p in l]),
     }
-    
+
     def register_update(self, prop):
         self.updates.add(prop)
 
@@ -181,7 +188,7 @@ class Board:
         for prop in new_updates:
             if prop not in Board.private_state_translations:
                 continue
-            
+
             elif Board.private_state_translations[prop] is None:
                 response[prop] = getattr(self, prop)
             elif type(Board.private_state_translations[prop]) is not tuple:
@@ -189,32 +196,32 @@ class Board:
             else:
                 (alias, transformer) = Board.private_state_translations[prop]
                 response[alias] = transformer(self, getattr(self, prop))
-                
+
         self.updates = set()
         return response
 
     def get_full_state(self):
         return self.extract_updates(Board.private_state_translations.keys())
-    
+
     # Player manipulation
     def add_player(self, name: str) -> None:
         self.register_update("players")
         if any(p.name == name for p in self.players):
             raise DuplicatePlayerNameError(name)
         self.players.append(Player(name))
-    
+
     def get_player(self, name: str) -> Player:
         for p in self.players:
             if p.name == name:
                 return p
         raise NonexistentPlayerNameError(name)
-    
+
     def begin_game(self) -> None:
         self.register_update("players")
         self.register_update("fascist_powers")
         if len(self.players) not in NUM_PLAYERS_TO_BOARD_CONFIG:
             raise InvalidNumPlayersError(len(self.players))
-        
+
         board_config = NUM_PLAYERS_TO_BOARD_CONFIG[len(self.players)]
         identities = ([Identity.LIBERAL] * board_config[0]
                       + [Identity.FASCIST] * board_config[1]
@@ -223,20 +230,20 @@ class Board:
 
         for i in range(len(self.players)):
             self.players[i].identity = identities[i]
-        
+
         self.fascist_powers = board_config[2]
-    
+
     # Other state manipulations
     def get_president(self) -> Player:
         return self.players[self.president_idx]
-    
+
     def advance_president(self) -> None:
         self.register_update("president_idx")
         self.register_update("chancellor")
         self.prev_president = self.get_president()
         self.prev_chancellor = self.chancellor
         self.president_idx = (self.president_idx + 1) % len(self.players)
-    
+
     def establish_new_chancellor(self, nominee: Player) -> None:
         self.register_update("chancellor")
         self.chancellor = nominee
@@ -262,7 +269,7 @@ class Board:
     def draw_three_tiles(self) -> List[Tile]:
         if len(self.unused_tiles) < 3:
             self.recycle_used_tiles()
-        
+
         self.drawn_tiles = self.unused_tiles[:3]
         self.unused_tiles = self.unused_tiles[3:]
         self.register_update("unused_tiles")
@@ -274,7 +281,7 @@ class Board:
         drawn_tiles.remove(tile)
         self.discarded_tiles.append(tile)
         self.register_update("discarded_tiles")
-    
+
     def get_winner(self) -> Optional[Faction]:
         self.winner: Optional[Faction] = None
         if self.liberal_progress == LIBERAL_WINNING_PROGRESS:
@@ -294,7 +301,7 @@ class Board:
         if len(self.unused_tiles) < 3:
             self.recycle_used_tiles()
         return self.unused_tiles[:3]
-    
+
     # have to be done at the same time due to weird president_idx logic
     def execute_player_and_advance_president(self, player_name: str) -> None:
         unlucky_person = None
@@ -304,22 +311,22 @@ class Board:
                 unlucky_person = player
                 break
             unlucky_idx += 1
-        
+
         if unlucky_person is None:
             raise UnreachableStateError("Cannot execute non-live player: " + player_name)
-        
+
         # save prev president and chancellor
         self.register_update("president_idx")
         self.register_update("chancellor")
         self.prev_president = self.get_president()
         self.prev_chancellor = self.chancellor
-        
+
         # find out next president_idx
         if self.president_idx < unlucky_idx:
             next_president_idx = self.president_idx + 1
         else:
             next_president_idx = self.president_idx % (len(self.players) - 1)
-        
+
         # actually eliminate the unlucky person
         self.players.remove(unlucky_person)
         self.eliminated_players.append(unlucky_person)
