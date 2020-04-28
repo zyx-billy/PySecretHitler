@@ -8,7 +8,6 @@ class Identity(Enum):
     HITLER = "Hitler"
 
 class Player:
-    def __init__(self, id, name):
-        self.id = id
-        self.name = name
+    def __init__(self, name):
+        self.name = name        # unique identifier
         self.identity = None

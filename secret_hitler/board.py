@@ -201,7 +201,7 @@ class Board:
         self.register_update("players")
         if any(p.name == name for p in self.players):
             raise DuplicatePlayerNameError(name)
-        self.players.append(Player(len(self.players), name))
+        self.players.append(Player(name))
     
     def get_player(self, name: str) -> Player:
         for p in self.players:
