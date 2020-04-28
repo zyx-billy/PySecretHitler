@@ -98,7 +98,7 @@ class RevealIdentities(Stage):
             elif player.identity == Identity.HITLER and len(fascist_player_names) == 1:
                 teammate_info += f" Your teammate is: {fascist_player_names[0]}"
             prompts.add(player,
-                        method="ack_identity",
+                        method=self.ack_identity,
                         prompt_str=f"You are: {player.identity.value}." + teammate_info,
                         choices=["Got it!"])
         return prompts
@@ -122,7 +122,7 @@ class NewPresident(Stage):
         prompts = Prompts()
         # president nominate chancellor
         prompts.add(self.board.get_president(),
-                    method="nominate_chancellor",
+                    method=self.nominate_chancellor,
                     prompt_str="Nominate your chancellor",
                     choices=[p.name for p in self.board.players])
         return prompts
@@ -151,7 +151,7 @@ class ChancellorNominated(Stage):
         # everyone votes
         for player in self.board.players:
             prompts.add(player,
-                        method="vote_for_chancellor",
+                        method=self.vote_for_chancellor,
                         prompt_str=f"Vote for chancellor: {self.nominee.name}",
                         choices=["ja", "nein"])
         return prompts
@@ -185,7 +185,7 @@ class PresidentDecidesLegislation(Stage):
         prompts = Prompts()
         # president discards a tile
         prompts.add(self.board.get_president(),
-                    method="president_discards_tile",
+                    method=self.president_discards_tile,
                     prompt_str="Discard a policy tile",
                     choices=[t.value for t in self.drawn_tiles])
         return prompts
@@ -206,7 +206,7 @@ class ChancellorDecidesLegislation(Stage):
         prompts = Prompts()
         # chancellor discards a tile
         prompts.add(self.board.chancellor,
-                    method="chancellor_discards_tile",
+                    method=self.chancellor_discards_tile,
                     prompt_str="Discard a policy tile",
                     choices=[t.value for t in self.remaining_tiles])
         return prompts
@@ -252,12 +252,12 @@ class PerformPresidentialPower(Stage):
         elif self.power == PresidentialPower.POLICY_PEEK:
             top_three_tiles_str = ", ".join([t.value for t in self.board.peek_top_three_tiles()])
             prompts.add(self.board.get_president(),
-                        method="done_policy_peek",
+                        method=self.done_policy_peek,
                         prompt_str=f"The top three tiles are: {top_three_tiles_str}",
                         choices=["Got it!"])
         elif self.power == PresidentialPower.EXECUTION:
             prompts.add(self.board.get_president(),
-                        method="execute_player",
+                        method=self.execute_player,
                         prompt_str=f"Execute one a player",
                         choices=[p.name for p in self.board.players])
         else:
