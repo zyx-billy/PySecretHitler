@@ -3,7 +3,7 @@
 Describes the various stages of the game and the user actions that can be performed at each stage.
 """
 
-from typing import List
+from typing import Callable, List
 
 from secret_hitler.board import Board, Tile, Faction, Vote, PresidentialPower
 from secret_hitler.exceptions import GameError, UnreachableStateError, UnimplementedFeature
@@ -12,6 +12,7 @@ from secret_hitler.prompts import Prompts
 
 
 class IllegalActionError(GameError):
+    """Base class for all exceptions thrown while performing a user action"""
     def __init__(self, stage: "Stage", action_name: str, reason: str):
         self.stage = stage
         self.action_name = action_name
@@ -19,12 +20,25 @@ class IllegalActionError(GameError):
         super().__init__(f"Cannot perform action {action_name} at state {type(stage).__name__}: {reason}")
 
 
+# type alias for user action handler methods
+ActionHandler = Callable[["Stage", str, str], "Stage"]
+
+
 class Stage:
-    def __init__(self, board):
-        self.board = board
+    """Base classs for all game stages
+    Derived concrete stages must:
+    - call this base class's __init__ method
+    - override the prompts method
+    - implement user actions
+    """
+    all_stages: List["Stage"] = []
+    user_actions: List[ActionHandler] = []
+
+    def __init__(self, board: Board):
+        self.board: Board = board
 
     def perform_action(self, action: str, choice: str) -> "Stage":
-        if not hasattr(self, action):
+        if (not hasattr(self, action)) or (getattr(self, action) not in self.user_actions):
             raise IllegalActionError(self, action, "Action does not exist")
         self._current_action = getattr(self, action)
         return self._current_action(choice)
@@ -33,9 +47,31 @@ class Stage:
         raise IllegalActionError(self, self._current_action.__name__ if self._current_action else "", reason)
 
     def prompts(self) -> Prompts:
+        """Returns the user prompts for each player.
+        Will only be called once per stage instance (immediately after __init__).
+        """
         return Prompts()
 
 
+# decorators for registering stages and their actions
+def game_stage(cls):
+    """register cls as a game stage and register its user actions"""
+    Stage.all_stages.append(cls)
+    cls.user_actions = []
+    for method in cls.__dict__.values():
+        if hasattr(method, "is_user_action"):
+            cls.user_actions.append(method)
+    return cls
+
+
+def user_action(f):
+    """mark f as a user_action"""
+    f.is_user_action = True
+    return f
+
+
+# concrete stages of the game
+@game_stage
 class RevealIdentities(Stage):
     def __init__(self, board: Board):
         super().__init__(board)
@@ -67,6 +103,7 @@ class RevealIdentities(Stage):
                         choices=["Got it!"])
         return prompts
 
+    @user_action
     def ack_identity(self, ack: str) -> Stage:
         self.num_identity_acks += 1
         if self.num_identity_acks == len(self.board.players):
@@ -74,6 +111,7 @@ class RevealIdentities(Stage):
         return self
 
 
+@game_stage
 class NewPresident(Stage):
     def __init__(self, board: Board, need_advance_president=True):
         super().__init__(board)
@@ -89,6 +127,7 @@ class NewPresident(Stage):
                     choices=[p.name for p in self.board.players])
         return prompts
 
+    @user_action
     def nominate_chancellor(self, nominee: str) -> Stage:
         if nominee == self.board.get_president().name:
             self.signal_illegal_action("Chancellor cannot be the same as current president")
@@ -100,6 +139,7 @@ class NewPresident(Stage):
         return ChancellorNominated(self.board, nominated_chancellor)
 
 
+@game_stage
 class ChancellorNominated(Stage):
     def __init__(self, board: Board, nominee: Player):
         super().__init__(board)
@@ -116,6 +156,7 @@ class ChancellorNominated(Stage):
                         choices=["ja", "nein"])
         return prompts
 
+    @user_action
     def vote_for_chancellor(self, vote: str) -> Stage:
         self.votes.append(Vote(vote))
 
@@ -134,6 +175,7 @@ class ChancellorNominated(Stage):
         return NewPresident(self.board)
 
 
+@game_stage
 class PresidentDecidesLegislation(Stage):
     def __init__(self, board: Board):
         super().__init__(board)
@@ -148,11 +190,13 @@ class PresidentDecidesLegislation(Stage):
                     choices=[t.value for t in self.drawn_tiles])
         return prompts
 
+    @user_action
     def president_discards_tile(self, tile: str) -> Stage:
         self.board.discard_tile(self.drawn_tiles, Tile(tile))
         return ChancellorDecidesLegislation(self.board, self.drawn_tiles)
 
 
+@game_stage
 class ChancellorDecidesLegislation(Stage):
     def __init__(self, board: Board, remaining_tiles: List[Tile]):
         super().__init__(board)
@@ -167,6 +211,7 @@ class ChancellorDecidesLegislation(Stage):
                     choices=[t.value for t in self.remaining_tiles])
         return prompts
 
+    @user_action
     def chancellor_discards_tile(self, tile: str) -> Stage:
         self.board.discard_tile(self.remaining_tiles, Tile(tile))
         # enact tile
@@ -188,6 +233,7 @@ class ChancellorDecidesLegislation(Stage):
         return NewPresident(self.board)
 
 
+@game_stage
 class PerformPresidentialPower(Stage):
     def __init__(self, board: Board, power: PresidentialPower):
         super().__init__(board)
@@ -224,14 +270,17 @@ class PerformPresidentialPower(Stage):
         elif power == PresidentialPower.EXECUTION:
             return self.execute_player
 
+    @user_action
     def done_policy_peek(self, ack: str) -> Stage:
         return NewPresident(self.board)
 
+    @user_action
     def execute_player(self, player: str) -> Stage:
         self.board.execute_player_and_advance_president(player)
         return NewPresident(self.board, need_advance_president=False)
 
 
+@game_stage
 class GameOver(Stage):
     def __init__(self, board: Board, winner: Faction):
         super().__init__(board)
