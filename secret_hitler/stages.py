@@ -38,7 +38,7 @@ class Stage:
         self.board: Board = board
 
     def perform_action(self, action: str, choice: str) -> "Stage":
-        if (not hasattr(self, action)) or (getattr(self, action) not in self.user_actions):
+        if (not hasattr(self, action)) or (getattr(self, action).__func__ not in self.user_actions):
             raise IllegalActionError(self, action, "Action does not exist")
         self._current_action = getattr(self, action)
         return self._current_action(choice)
