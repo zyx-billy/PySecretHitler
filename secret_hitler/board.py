@@ -152,11 +152,12 @@ class Board:
         self.eliminated_players: List[Player] = []
         self.president_idx: int = 0
         self.chancellor: Player = None
-        self.prev_president: Player = None
-        self.prev_chancellor: Player = None
+        self.prev_president: Optional[Player] = None
+        self.prev_chancellor: Optional[Player] = None
         self.nominated_chancellor: Player = None
         self.unused_tiles: List[Tile] = [Tile.LIBERAL_POLICY] * 6 + [Tile.FASCIST_POLICY] * 11
         self.discarded_tiles: List[Tile] = []
+        self.election_tracker: int = 0
         self.liberal_progress: int = 0
         self.fascist_progress: int = 0
         self.fascist_powers: List[Optional[PresidentialPower]] = []
@@ -174,6 +175,7 @@ class Board:
         "chancellor": (lambda me, c: c and c.name),
         "unused_tiles": (lambda me, l: len(l)),
         "discarded_tiles": (lambda me, l: len(l)),
+        "election_tracker": None,
         "liberal_progress": None,
         "fascist_progress": None,
         "fascist_powers": (lambda me, l: [p.description() if p else "" for p in l]),
@@ -249,6 +251,7 @@ class Board:
         self.chancellor = nominee
 
     def enact_policy(self, policy: Tile) -> None:
+        # the enacted tile is destroyed (does not put back into any tile list)
         print("enacting policy: " + policy.value)
         if policy == Tile.LIBERAL_POLICY:
             self.liberal_progress += 1
@@ -256,7 +259,10 @@ class Board:
         elif policy == Tile.FASCIST_POLICY:
             self.fascist_progress += 1
             self.register_update("fascist_progress")
-        # destroys the enacted tile (does not put back into any tile list)
+        # reset election tracker
+        if self.election_tracker > 0:
+            self.election_tracker = 0
+            self.register_update("election_tracker")
 
     def recycle_used_tiles(self) -> None:
         # shuffle discarded tiles and put under unused tiles
@@ -270,10 +276,10 @@ class Board:
         if len(self.unused_tiles) < 3:
             self.recycle_used_tiles()
 
-        self.drawn_tiles = self.unused_tiles[:3]
+        drawn_tiles = self.unused_tiles[:3]
         self.unused_tiles = self.unused_tiles[3:]
         self.register_update("unused_tiles")
-        return self.drawn_tiles
+        return drawn_tiles
 
     def discard_tile(self, drawn_tiles: List[Tile], tile: Tile) -> None:
         if tile not in drawn_tiles:
@@ -281,6 +287,27 @@ class Board:
         drawn_tiles.remove(tile)
         self.discarded_tiles.append(tile)
         self.register_update("discarded_tiles")
+
+    def advance_election_tracker(self) -> bool:
+        self.election_tracker += 1
+        self.register_update("election_tracker")
+        return self.election_tracker == 3  # true if need to enter chaos
+
+    def enter_chaos(self) -> None:
+        # enact the top unused tile
+        if len(self.unused_tiles) < 1:
+            self.recycle_used_tiles()
+        selected_policy = self.unused_tiles[0]
+        self.unused_tiles = self.unused_tiles[1:]
+        self.register_update("unused_tiles")
+        self.enact_policy(selected_policy)
+        # reset election tracker and term limits
+        self.election_tracker = 0
+        self.prev_chancellor = None
+        self.prev_president = None
+        self.register_update("election_tracker")
+        self.register_update("prev_chancellor")
+        self.register_update("prev_president")
 
     def get_winner(self) -> Optional[Faction]:
         self.winner: Optional[Faction] = None

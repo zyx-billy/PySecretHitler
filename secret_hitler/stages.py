@@ -171,7 +171,9 @@ class ChancellorNominated(Stage):
             return PresidentDecidesLegislation(self.board)
 
         # vote did not pass, move on to a new president
-        # TODO: implement election tracker
+        entered_chaos = self.board.advance_election_tracker()
+        if entered_chaos:
+            self.board.enter_chaos()
         return NewPresident(self.board)
 
 

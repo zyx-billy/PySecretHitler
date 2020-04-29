@@ -50,6 +50,7 @@ class App extends React.Component {
             unused_tiles: undefined,
             discarded_tiles: undefined,
             drawn_tiles: undefined,
+            election_tracker: 0,
             liberal_progress: 0,
             fascist_progress: 0,
             fascist_powers: undefined,
@@ -262,6 +263,7 @@ class App extends React.Component {
                             name="Fascist"
                             powers={this.state.fascist_powers}
                             progress={this.state.fascist_progress} />
+                        <ElectionTracker progress={this.state.election_tracker} />
                         <TileDeck name="Unused Tiles" size={this.state.unused_tiles} />
                         <TileDeck name="Discarded Tiles" size={this.state.discarded_tiles} />
                         <PlayerContainer
@@ -435,6 +437,20 @@ class ProgressBoard extends React.Component {
                 <div className="slots-container">
                     {slots}
                 </div>
+            </div>
+        );
+    }
+}
+
+class ElectionTracker extends React.Component {
+    constructor(props) { // progress
+        super(props);
+    }
+
+    render() {
+        return (
+            <div className="election-tracker">
+                Election Tracker: {this.props.progress}/3
             </div>
         );
     }
