@@ -352,7 +352,8 @@ class Board:
         if self.president_idx < unlucky_idx:
             next_president_idx = self.president_idx + 1
         else:
-            next_president_idx = self.president_idx % (len(self.players) - 1)
+            next_president_idx = self.president_idx
+        next_president_idx = next_president_idx % (len(self.players) - 1)
 
         # actually eliminate the unlucky person
         self.players.remove(unlucky_person)
