@@ -174,6 +174,10 @@ class ChancellorNominated(Stage):
         entered_chaos = self.board.advance_election_tracker()
         if entered_chaos:
             self.board.enter_chaos()
+            # check if winner exists
+            winner = self.board.get_winner()
+            if winner is not None:
+                return GameOver(self.board, winner)
         return NewPresident(self.board)
 
 
