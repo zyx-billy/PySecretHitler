@@ -30,6 +30,14 @@ class GameHandle:
         self.ids: Dict[str, str] = dict()                # player_name -> player_id
         self.prompts: Dict[str, Prompt] = dict()         # player_name -> secret_hitler.Prompt
         self.has_begun: bool = False                     # has the game begun?
+        # non-players
+        self.observers: Dict[str, WSHandler] = dict()    # "player_id" -> ws_handle
+
+    def add_observer(self, player_id, ws_handle):
+        self.observers[player_id] = ws_handle
+
+    def remove_observer(self, player_id):
+        del self.observers[player_id]
 
     def add_player(self, player: str, ws_handle):
         self.game.add_player(player)
@@ -38,16 +46,21 @@ class GameHandle:
         self.handles[player_id] = ws_handle
         self.ids[player] = player_id
 
+        players_state = {"players": list(self.players.values())}
+
         # broadcast updated player list to everyone
         for player_id in self.players.keys():
-            self.handles[player_id].send_state_update({
-                "players": list(self.players.values())
-            })
+            self.handles[player_id].send_state_update(players_state)
+        for ws in self.observers.values():
+            ws.send_state_update(players_state)
 
         return player_id
 
-    def update_ws_handle(self, player_id: str, ws_handle):
-        self.handles[player_id] = ws_handle
+    def update_ws_handle(self, player_id: str, ws_handle, is_observer=False):
+        if is_observer:
+            self.observers[player_id] = ws_handle
+        else:
+            self.handles[player_id] = ws_handle
 
     def get_identity(self, player_id: str):
         return self.game.get_identity(self.players[player_id])
@@ -74,6 +87,9 @@ class GameHandle:
             self.handles[player_id].send_player_identity(self.game.get_identity(self.players[player_id]))
             self.handles[player_id].send_game_begun()
             self.handles[player_id].send_state_update(full_state)
+        for ws in self.observers.values():
+            ws.send_game_begun()
+            ws.send_state_update(full_state)
 
     def perform_action(self, player_id, action, choice):
         # check if user is authorized
@@ -88,6 +104,8 @@ class GameHandle:
             # send state updates to everyone
             for ws in self.handles.values():
                 ws.send_state_update(state_updates)
+            for ws in self.observers.values():
+                ws.send_state_update(state_updates)
 
     def get_prompt_of_player(self, player_id):
         player = self.players[player_id]
@@ -100,9 +118,12 @@ class WSHandler(tornado.websocket.WebSocketHandler):
     def open(self):
         self.game = None
         self.player_id = None
+        self.is_observer = False
         print("new ws connection!")
 
     def on_close(self):
+        if self.is_observer and self.game:
+            self.game.remove_observer(self.player_id)
         print("connection closed")
 
     def check_origin(self, origin):
@@ -160,6 +181,21 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 self.respond_to_success(f"Joined game. Currently {len(self.game.players)} players in game.")
                 self.send_game_id(request["game_id"])
                 self.send_player_id()
+                return
+
+            if request["type"] == "observe":
+                self.game = self.safe_get_game(request)
+                self.player_id = str(uuid.uuid4())
+                self.is_observer = True
+                self.game.add_observer(self.player_id, self)
+                self.respond_to_success(f"Joined game as observer.")
+                self.send_game_id(request["game_id"])
+                self.send_player_id()
+                if self.game.has_begun:
+                    # send game_begun to send client into game proper
+                    self.send_game_begun()
+                    # send full state to get client up to date
+                    self.send_state_update(self.game.get_full_state())
                 return
 
             if request["type"] == "begin_game":

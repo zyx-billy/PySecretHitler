@@ -58,10 +58,12 @@ class App extends React.Component {
         }
         this.game_id = undefined;
         this.player_id = undefined;
+        this.is_observer = false;
 
         this.on_user_choice = this.on_user_choice.bind(this);
         this.on_new_game_submit = this.on_new_game_submit.bind(this);
         this.on_join_game_submit = this.on_join_game_submit.bind(this);
+        this.on_observe_game_submit = this.on_observe_game_submit.bind(this);
         this.on_begin_game_submit = this.on_begin_game_submit.bind(this);
         this.connect = this.connect.bind(this);
     }
@@ -161,12 +163,14 @@ class App extends React.Component {
     }
 
     update_game_id(game_id) {
-        set_cookie("game_id", game_id);
+        if (!this.is_observer)
+            set_cookie("game_id", game_id);
         this.game_id = game_id;
     }
 
     update_player_id(player_id) {
-        set_cookie("player_id", player_id);
+        if (!this.is_observer)
+            set_cookie("player_id", player_id);
         this.player_id = player_id;
     }
 
@@ -196,6 +200,14 @@ class App extends React.Component {
         }));
     }
 
+    on_observe_game_submit(game_id) {
+        this.is_observer = true;
+        this.ws.send(JSON.stringify({
+            type: "observe",
+            game_id: game_id
+        }))
+    }
+
     on_begin_game_submit() {
         this.ws.send(JSON.stringify({
             type: "begin_game"
@@ -216,7 +228,8 @@ class App extends React.Component {
                             <p>Please create a new game or join an existing game:</p>
                             <NewOrJoinForms
                                 on_new_game_submit={this.on_new_game_submit}
-                                on_join_game_submit={this.on_join_game_submit} />
+                                on_join_game_submit={this.on_join_game_submit}
+                                on_observe_game_submit={this.on_observe_game_submit} />
                         </div>
                         <div className="sidebar">
                             <EventList items={this.state.event_items} />
@@ -271,7 +284,7 @@ class App extends React.Component {
                             dead_players={this.state.eliminated_players}
                             president={this.state.president}
                             chancellor={this.state.chancellor} />
-                        {!this.state.prompt ? "" :
+                        {this.is_observer && !this.state.prompt ? "" :
                             <UserChoiceSelector
                                 key={this.state.prompt_key}
                                 on_user_choice={this.on_user_choice}
@@ -290,12 +303,13 @@ class App extends React.Component {
 
 /* Pre-Game */
 class NewOrJoinForms extends React.Component {
-    constructor(props) { // on_new_game_submit, on_join_game_submit
+    constructor(props) { // on_new_game_submit, on_join_game_submit, on_observe_game_submit
         super(props);
         this.state = {
             new_game_host: "",
             join_game_id: "",
             player_name: "",
+            observe_game_id: "",
             submitted: false
         };
 
@@ -320,6 +334,10 @@ class NewOrJoinForms extends React.Component {
             this.setState({submitted: true});
             console.log("Joining game: " + this.state.join_game_id + ", for player: " + this.state.player_name);
             this.props.on_join_game_submit(this.state.join_game_id.trim(), this.state.player_name.trim());
+        } else if (target_name == "observe-form") {
+            this.setState({submitted: true});
+            console.log("Observing game: " + this.state.observe_game_id);
+            this.props.on_observe_game_submit(this.state.observe_game_id.trim());
         }
         event.preventDefault();
     }
@@ -358,6 +376,19 @@ class NewOrJoinForms extends React.Component {
                             onChange={this.handleChange} />
                         </label>
                         <input type="submit" value="Join" disabled={this.state.submitted} />
+                    </form>
+                </div>
+                <div className="observe-form-wrapper">
+                    <p>Observe Game:</p>
+                    <form onSubmit={this.handleSubmit} name="observe-form">
+                        <label>
+                        Game ID:
+                        <input type="text"
+                            name="observe_game_id"
+                            value={this.state.observe_game_id}
+                            onChange={this.handleChange} />
+                        </label>
+                        <input type="submit" value="Observe" disabled={this.state.submitted} />
                     </form>
                 </div>
             </div>
